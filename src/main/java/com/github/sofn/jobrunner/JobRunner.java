@@ -73,16 +73,23 @@ public class JobRunner {
                 + StringUtils.substring(className, 1);
     }
 
-    public <T> T getr(JobCommand<T> r) {
-        return getr(getDefaultJobName(r));
+    public <T> T get(JobCommand<T> r) {
+        return get(r.getJobName());
     }
 
-    public <T> T getr(Class<? extends JobCommand<T>> clazz) {
-        return getr(getDefaultJobName(clazz));
+    public <T> T get(Class<? extends JobCommand<T>> clazz) {
+        return get(getDefaultJobName(clazz));
+    }
+
+    /**
+     * clazz参数只为获取泛型参数
+     */
+    public <T> T get(String jobName, Class<? extends JobCommand<T>> clazz) {
+        return get(jobName);
     }
 
     @SuppressWarnings("unchecked")
-    public <T> T getr(String jobName) {
+    public <T> T get(String jobName) {
         JobCommand<T> job = (JobCommand<T>) getJob(jobName);
         if (job == null) {
             throw new JobRunnerException("job " + jobName + " not regist");

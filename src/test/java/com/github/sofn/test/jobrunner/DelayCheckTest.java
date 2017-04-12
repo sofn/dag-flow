@@ -18,7 +18,7 @@ public class DelayCheckTest {
         Job2 job2 = new Job2();
         runner.putJob(job2.addDepend(job1));
         runner.startJobs();
-        System.out.println(runner.getr(job2));
+        System.out.println(runner.get(job2));
     }
 
     @Test
@@ -29,7 +29,7 @@ public class DelayCheckTest {
         runner.putJob(job2.addDepend(Job1.class));
         runner.putJob(job1);
         runner.startJobs();
-        System.out.println(runner.getr(job2));
+        System.out.println(runner.get(job2));
     }
 
     @Test
@@ -41,7 +41,7 @@ public class DelayCheckTest {
         runner.putJob(job2.addDepend(Job1.class));
         runner.putJob(job1);
         runner.startJobs();
-        System.out.println(runner.getr(job2));
+        System.out.println(runner.get(job2));
     }
 
     @Test
@@ -52,7 +52,7 @@ public class DelayCheckTest {
         runner.putJob(job2.addDepend(job1));
         runner.putJob(job1.addDepend(job2));
         runner.startJobs();
-        System.out.println(runner.getr(job2));
+        System.out.println(runner.get(job2));
     }
 
 }

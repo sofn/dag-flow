@@ -82,9 +82,9 @@ public class JobState<R> {
             Class<? extends JobCommand<?>> dependClass = annotation.value();
             try {
                 if (StringUtils.equals(annotation.jobName(), "")) {
-                    field.set(this.job, runner.getr(JobRunner.getDefaultJobName(dependClass)));
+                    field.set(this.job, runner.get(JobRunner.getDefaultJobName(dependClass)));
                 } else {
-                    field.set(this.job, runner.getr(annotation.jobName()));
+                    field.set(this.job, runner.get(annotation.jobName()));
                 }
             } catch (IllegalAccessException e) {
                 throw new JobRunnerException("injectValue error", e);

@@ -17,7 +17,7 @@ public class JobAnnotationTest {
         runner.putJob(new Job1());
         runner.putJob(new Job2());
         runner.startJobs();
-        System.out.println(runner.getr(Job2.class));
+        System.out.println(runner.get(Job2.class));
     }
 
 }

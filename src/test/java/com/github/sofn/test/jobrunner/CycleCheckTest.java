@@ -19,7 +19,7 @@ public class CycleCheckTest {
         job1.addDepend(job1);
         runner.putJob(job1);
         runner.startJobs();
-        System.out.println(runner.getr(job1));
+        System.out.println(runner.get(job1));
     }
 
     @Test(expected = CycleDependException.class)

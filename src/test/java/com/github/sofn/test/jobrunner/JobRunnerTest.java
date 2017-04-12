@@ -28,7 +28,7 @@ public class JobRunnerTest {
         Job1 job1 = new Job1();
         runner.putJob(job1);
         runner.startJobs();
-        System.out.println(runner.getr(job1));
+        System.out.println(runner.get(job1));
     }
 
     @Test
@@ -40,7 +40,7 @@ public class JobRunnerTest {
         runner.putJob(job2).addDepend(job1);
         runner.startJobs();
         TimeUnit.SECONDS.sleep(3);
-        System.out.println(runner.getr(job1));
+        System.out.println(runner.get(job1));
     }
 
     @Test
@@ -52,7 +52,7 @@ public class JobRunnerTest {
         runner.putJob(job1);
         runner.putJob(job2).addDepend(job1);
         runner.startJobs();
-        System.out.println(runner.getr(job2));
+        System.out.println(runner.get(job2));
     }
 
 }
