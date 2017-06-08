@@ -179,7 +179,7 @@ public class JobRunner {
      * 启动任务及其依赖, 如果任务已经启动, 返回对应的jobState
      */
     public <T> JobState<T> queueJob(JobCommand<T> job) {
-        return queueJob(getDefaultJobName(job), job);
+        return queueJob(job.getJobName(), job);
     }
 
     @SuppressWarnings("unchecked")
