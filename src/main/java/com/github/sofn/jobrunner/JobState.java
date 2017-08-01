@@ -48,6 +48,7 @@ public class JobState<R> {
         return done.get();
     }
 
+    @SuppressWarnings("unchecked")
     public void start() {
         if (this.job.getDependencys().isEmpty()) {
             AsyncSubject subject = AsyncSubject.create();

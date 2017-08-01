@@ -21,7 +21,7 @@ public class Job2 extends JobCommand<String> {
     }
 
     @Override
-    protected String run() throws Exception {
+    protected String call() throws Exception {
         System.out.println("job2 start " + DateFormatUtils.ISO_TIME_NO_T_FORMAT.format(new Date()));
         System.out.println("job2 got job1 value: " + job1Result);
         TimeUnit.SECONDS.sleep(1);

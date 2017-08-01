@@ -225,7 +225,11 @@ public class JobRunner {
         T result;
         try {
             result = state.getObservable().doOnError(throwable -> state.setDone()).toBlocking().toFuture().get();
-            this.results.put(jobName, result);
+            if (result != null) {
+                this.results.put(jobName, result);
+            } else {
+                log.error("JobRunner job return null, jobName: " + jobName);
+            }
         } finally {
             state.setDone(); //设置完成状态
         }

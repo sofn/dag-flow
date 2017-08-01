@@ -43,16 +43,4 @@ public class DelayCheckTest {
         runner.startJobs();
         System.out.println(runner.get(job2));
     }
-
-    @Test
-    public void testDelayCheck04() {
-        JobRunner runner = new JobRunner();
-        Job1 job1 = new Job1();
-        Job2 job2 = new Job2();
-        runner.putJob(job2.addDepend(job1));
-        runner.putJob(job1.addDepend(job2));
-        runner.startJobs();
-        System.out.println(runner.get(job2));
-    }
-
 }
