@@ -26,7 +26,7 @@ public class JobRunner {
     private Map<String, Object> results = new ConcurrentHashMap<>(); //保存结果
 
     public <T> JobCommand<T> putJob(JobCommand<T> job) {
-        return putJob(getDefaultJobName(job), job);
+        return putJob(job.getJobName(), job);
     }
 
     public <T> JobCommand<T> putJob(String jobName, JobCommand<T> job) {
@@ -38,6 +38,26 @@ public class JobRunner {
         job.setRunner(this);
         allJobs.put(jobName, job);
         return job;
+    }
+
+    //直接存放结果
+    public <T> boolean putVal(Class<JobCommand<T>> clazz, T value) {
+        return putVal(getDefaultJobName(clazz), value);
+    }
+
+    public <T> boolean putVal(JobCommand<T> job, T value) {
+        return putVal(job.getJobName(), value);
+    }
+
+    public <T> boolean putVal(String jobName, T value) {
+        if (results.containsKey(jobName)) {
+            return false;
+        }
+        if (value == null) {
+            return false;
+        }
+        results.put(jobName, value);
+        return true;
     }
 
     public JobCommand<?> getJob(Class clazz) {
@@ -62,7 +82,9 @@ public class JobRunner {
 
     public static String getDefaultJobName(Object obj) {
         String className;
-        if (obj instanceof Class) {
+        if (obj instanceof JobCommand) {
+            return ((JobCommand) obj).getJobName();
+        } else if (obj instanceof Class) {
             className = ((Class) obj).getSimpleName();
         } else if (obj instanceof String) {
             className = (String) obj;
@@ -106,6 +128,18 @@ public class JobRunner {
             e.printStackTrace();
         }
         return (T) results.get(jobName);
+    }
+
+    public <T> boolean exist(JobCommand<T> r) {
+        return exist(r.getJobName());
+    }
+
+    public <T> boolean exist(Class<? extends JobCommand<T>> clazz) {
+        return exist(getDefaultJobName(clazz));
+    }
+
+    public boolean exist(String jobName) {
+        return allJobs.get(jobName) != null;
     }
 
     /**
