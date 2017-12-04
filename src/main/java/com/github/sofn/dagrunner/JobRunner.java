@@ -1,9 +1,9 @@
-package com.github.sofn.jobrunner;
+package com.github.sofn.dagrunner;
 
-import com.github.sofn.jobrunner.annnotation.JobDepend;
-import com.github.sofn.jobrunner.utils.AnnotationUtil;
-import com.github.sofn.jobrunner.utils.CycleDependException;
-import com.github.sofn.jobrunner.utils.JobRunnerException;
+import com.github.sofn.dagrunner.annnotation.JobDepend;
+import com.github.sofn.dagrunner.utils.AnnotationUtil;
+import com.github.sofn.dagrunner.utils.CycleDependException;
+import com.github.sofn.dagrunner.utils.JobRunnerException;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

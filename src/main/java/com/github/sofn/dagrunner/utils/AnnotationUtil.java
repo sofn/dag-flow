@@ -1,7 +1,7 @@
-package com.github.sofn.jobrunner.utils;
+package com.github.sofn.dagrunner.utils;
 
-import com.github.sofn.jobrunner.JobCommand;
-import com.github.sofn.jobrunner.annnotation.JobDepend;
+import com.github.sofn.dagrunner.JobCommand;
+import com.github.sofn.dagrunner.annnotation.JobDepend;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;

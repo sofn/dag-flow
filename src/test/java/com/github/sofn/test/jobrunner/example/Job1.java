@@ -1,6 +1,6 @@
 package com.github.sofn.test.jobrunner.example;
 
-import com.github.sofn.jobrunner.JobCommand;
+import com.github.sofn.dagrunner.JobCommand;
 import org.apache.commons.lang.time.DateFormatUtils;
 
 import java.util.Date;

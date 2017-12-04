@@ -1,6 +1,6 @@
-package com.github.sofn.jobrunner;
+package com.github.sofn.dagrunner;
 
-import com.github.sofn.jobrunner.utils.JobRunnerException;
+import com.github.sofn.dagrunner.utils.JobRunnerException;
 import com.netflix.hystrix.*;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;

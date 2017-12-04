@@ -5,17 +5,17 @@ apply plugin: 'java'
 group 'com.github.sofn'
 version '1.0-SNAPSHOT'
 
-
 sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 repositories {
+    mavenLocal()
+    maven { url "https://dl.bintray.com/netflixoss/maven/" }
     mavenCentral()
 }
 
 dependencies {
     compile "com.netflix.hystrix:hystrix-core:$hystrixVersion"
-
     testCompile "junit:junit:$junitVersion"
 }
 
@@ -31,5 +31,5 @@ idea {
 
 //执行gradle wrapper自动生成gradlew脚本及配置
 task wrapper(type: Wrapper) {
-    gradleVersion = '4.0.1'
+    gradleVersion = '4.3.1'
 }

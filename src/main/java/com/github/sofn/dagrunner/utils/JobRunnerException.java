@@ -1,4 +1,4 @@
-package com.github.sofn.jobrunner.utils;
+package com.github.sofn.dagrunner.utils;
 
 /**
  * @author lishaofeng

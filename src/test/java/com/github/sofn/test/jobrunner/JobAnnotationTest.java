@@ -1,6 +1,6 @@
 package com.github.sofn.test.jobrunner;
 
-import com.github.sofn.jobrunner.JobRunner;
+import com.github.sofn.dagrunner.JobRunner;
 import com.github.sofn.test.jobrunner.example.Job1;
 import com.github.sofn.test.jobrunner.example.Job2;
 import org.junit.Test;

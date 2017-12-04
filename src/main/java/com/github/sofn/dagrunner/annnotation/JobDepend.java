@@ -1,6 +1,6 @@
-package com.github.sofn.jobrunner.annnotation;
+package com.github.sofn.dagrunner.annnotation;
 
-import com.github.sofn.jobrunner.JobCommand;
+import com.github.sofn.dagrunner.JobCommand;
 
 import java.lang.annotation.*;
 
