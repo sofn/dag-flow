@@ -1,22 +1,22 @@
-package com.github.sofn.test.jobrunner;
+package com.github.sofn.test.dagrunner;
 
-import com.github.sofn.dagrunner.JobRunner;
-import com.github.sofn.test.jobrunner.example.Job1;
-import com.github.sofn.test.jobrunner.example.Job2;
+import com.github.sofn.dagrunner.DagRunner;
+import com.github.sofn.test.dagrunner.example.Job1;
+import com.github.sofn.test.dagrunner.example.Job2;
 import org.junit.Test;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2017-03-22 15:26
  */
-public class JobRunnerTest {
+public class DagRunnerTest {
 
     @Test
     public void test01() throws ExecutionException, InterruptedException {
-        JobRunner runner = new JobRunner();
+        DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         String res = runner.doJob(job1);
         System.out.println(res);
@@ -24,7 +24,7 @@ public class JobRunnerTest {
 
     @Test
     public void test02() throws ExecutionException, InterruptedException {
-        JobRunner runner = new JobRunner();
+        DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         runner.putJob(job1);
         runner.startJobs();
@@ -33,7 +33,7 @@ public class JobRunnerTest {
 
     @Test
     public void test03() throws ExecutionException, InterruptedException {
-        JobRunner runner = new JobRunner();
+        DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         Job2 job2 = new Job2();
         runner.putJob(job1);
@@ -45,7 +45,7 @@ public class JobRunnerTest {
 
     @Test
     public void test04() throws ExecutionException, InterruptedException {
-        JobRunner runner = new JobRunner();
+        DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         job1.setDelay(true);
         Job2 job2 = new Job2();

@@ -1,19 +1,19 @@
-package com.github.sofn.test.jobrunner;
+package com.github.sofn.test.dagrunner;
 
-import com.github.sofn.dagrunner.JobRunner;
-import com.github.sofn.test.jobrunner.example.Job1;
-import com.github.sofn.test.jobrunner.example.Job2;
+import com.github.sofn.dagrunner.DagRunner;
+import com.github.sofn.test.dagrunner.example.Job1;
+import com.github.sofn.test.dagrunner.example.Job2;
 import org.junit.Test;
 
 /**
  * @author lishaofeng
  * @version 1.0 Created at: 2017-03-22 15:26
  */
-public class JobAnnotationTest {
+public class DagAnnotationTest {
 
     @Test
     public void test01() {
-        JobRunner runner = new JobRunner();
+        DagRunner runner = new DagRunner();
         runner.putJob(new Job1());
         runner.putJob(new Job2());
         runner.startJobs();

@@ -12,7 +12,7 @@ import java.lang.annotation.*;
 @Documented
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface JobDepend {
+public @interface DagDepend {
 
     /**
      * 任务名称

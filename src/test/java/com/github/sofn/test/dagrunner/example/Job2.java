@@ -1,7 +1,7 @@
-package com.github.sofn.test.jobrunner.example;
+package com.github.sofn.test.dagrunner.example;
 
 import com.github.sofn.dagrunner.JobCommand;
-import com.github.sofn.dagrunner.annnotation.JobDepend;
+import com.github.sofn.dagrunner.annnotation.DagDepend;
 import org.apache.commons.lang.time.DateFormatUtils;
 
 import java.util.Date;
@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class Job2 extends JobCommand<String> {
 
-    @JobDepend(Job1.class)
+    @DagDepend(Job1.class)
     private String job1Result = depend(Job1.class);
 
     public Job2() {

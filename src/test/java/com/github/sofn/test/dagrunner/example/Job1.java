@@ -1,4 +1,4 @@
-package com.github.sofn.test.jobrunner.example;
+package com.github.sofn.test.dagrunner.example;
 
 import com.github.sofn.dagrunner.JobCommand;
 import org.apache.commons.lang.time.DateFormatUtils;

@@ -29,6 +29,10 @@ idea {
     }
 }
 
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
+}
+
 //执行gradle wrapper自动生成gradlew脚本及配置
 task wrapper(type: Wrapper) {
     gradleVersion = '4.3.1'

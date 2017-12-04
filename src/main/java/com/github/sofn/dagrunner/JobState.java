@@ -1,9 +1,8 @@
 package com.github.sofn.dagrunner;
 
-
-import com.github.sofn.dagrunner.annnotation.JobDepend;
+import com.github.sofn.dagrunner.annnotation.DagDepend;
 import com.github.sofn.dagrunner.utils.AnnotationUtil;
-import com.github.sofn.dagrunner.utils.JobRunnerException;
+import com.github.sofn.dagrunner.utils.DagRunnerException;
 import org.apache.commons.lang.StringUtils;
 import rx.Observable;
 import rx.subjects.AsyncSubject;
@@ -14,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2017-03-21 22:25
  */
 public class JobState<R> {
@@ -29,9 +28,9 @@ public class JobState<R> {
      * 任务是否已经执行完成
      */
     private final AtomicBoolean done = new AtomicBoolean(false);
-    private JobRunner runner;
+    private DagRunner runner;
 
-    public JobState(JobRunner runner, JobCommand<R> job) {
+    public JobState(DagRunner runner, JobCommand<R> job) {
         this.runner = runner;
         this.job = job;
     }
@@ -79,16 +78,16 @@ public class JobState<R> {
 
     private void injectValue() {
         for (Field field : AnnotationUtil.jobDepends(this.job)) {
-            JobDepend annotation = field.getAnnotation(JobDepend.class);
+            DagDepend annotation = field.getAnnotation(DagDepend.class);
             Class<? extends JobCommand<?>> dependClass = annotation.value();
             try {
                 if (StringUtils.equals(annotation.jobName(), "")) {
-                    field.set(this.job, runner.get(JobRunner.getDefaultJobName(dependClass)));
+                    field.set(this.job, runner.get(DagRunner.getDefaultJobName(dependClass)));
                 } else {
                     field.set(this.job, runner.get(annotation.jobName()));
                 }
             } catch (IllegalAccessException e) {
-                throw new JobRunnerException("injectValue error", e);
+                throw new DagRunnerException("injectValue error", e);
             }
         }
     }

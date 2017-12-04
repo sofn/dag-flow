@@ -1,6 +1,6 @@
 package com.github.sofn.dagrunner;
 
-import com.github.sofn.dagrunner.utils.JobRunnerException;
+import com.github.sofn.dagrunner.utils.DagRunnerException;
 import com.netflix.hystrix.*;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2017-03-21 22:22
  */
 public abstract class JobCommand<R> extends HystrixCommand<R> {
@@ -21,7 +21,7 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
     private String jobName;
     private Set<String> dependencys = new HashSet<>();
     private Map<String, JobCommand<?>> delayRunCheck = new HashMap<>(); //延迟校验，因为刚开始runner可能还没设置
-    protected JobRunner runner;
+    protected DagRunner runner;
     private boolean loged;
     private long runTime;
 
@@ -37,9 +37,9 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
         );
     }
 
-    public void setRunner(JobRunner runner) {
+    public void setRunner(DagRunner runner) {
         if (this.runner != null && this.runner != runner) {
-            throw new JobRunnerException("one job cannot input multi runner");
+            throw new DagRunnerException("one job cannot input multi runner");
         }
 
         this.runner = runner;
@@ -50,7 +50,13 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
     }
 
     public String getJobName() {
-        return StringUtils.isEmpty(this.jobName) ? JobRunner.getDefaultJobName(this) : this.jobName;
+        if (StringUtils.isNotEmpty(this.jobName)) {
+            return this.jobName;
+        } else {
+            String className = this.getClass().getSimpleName();
+            return StringUtils.lowerCase(StringUtils.substring(className, 0, 1))
+                    + StringUtils.substring(className, 1);
+        }
     }
 
     public boolean isDelay() {
@@ -66,7 +72,7 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
     }
 
     public JobCommand<R> addDepend(JobCommand<?> depend) {
-        return addDepend(JobRunner.getDefaultJobName(depend), depend);
+        return addDepend(DagRunner.getDefaultJobName(depend), depend);
     }
 
     public JobCommand<R> addDepend(String jobName, JobCommand<?> depend) {
@@ -82,7 +88,7 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
     }
 
     public JobCommand<R> addDepend(Class<?> clazz) {
-        return addDepend(JobRunner.getDefaultJobName(clazz));
+        return addDepend(DagRunner.getDefaultJobName(clazz));
     }
 
     public JobCommand<R> addDepend(String jobName) {
@@ -105,7 +111,7 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
                     runner.putJob(jobName, job);
                     job.delayCheck();
                 } else if (existJob != job && StringUtils.equals(this.jobName, existJob.jobName)) {
-                    throw new JobRunnerException("multi job: " + jobName);
+                    throw new DagRunnerException("multi job: " + jobName);
                 }
             } else {
                 runner.getEnsureExist(jobName);

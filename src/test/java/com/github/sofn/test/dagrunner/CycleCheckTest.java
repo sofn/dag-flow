@@ -1,9 +1,9 @@
-package com.github.sofn.test.jobrunner;
+package com.github.sofn.test.dagrunner;
 
-import com.github.sofn.dagrunner.JobRunner;
+import com.github.sofn.dagrunner.DagRunner;
 import com.github.sofn.dagrunner.utils.CycleDependException;
-import com.github.sofn.test.jobrunner.example.Job1;
-import com.github.sofn.test.jobrunner.example.Job2;
+import com.github.sofn.test.dagrunner.example.Job1;
+import com.github.sofn.test.dagrunner.example.Job2;
 import org.junit.Test;
 
 /**
@@ -14,7 +14,7 @@ public class CycleCheckTest {
 
     @Test(expected = CycleDependException.class)
     public void testCycleCheck01() {
-        JobRunner runner = new JobRunner();
+        DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         job1.addDepend(job1);
         runner.putJob(job1);
@@ -24,7 +24,7 @@ public class CycleCheckTest {
 
     @Test(expected = CycleDependException.class)
     public void testCycleCheck02() {
-        JobRunner runner = new JobRunner();
+        DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         Job2 job2 = new Job2();
         job1.addDepend(job2);

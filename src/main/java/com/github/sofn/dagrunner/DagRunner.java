@@ -1,9 +1,9 @@
 package com.github.sofn.dagrunner;
 
-import com.github.sofn.dagrunner.annnotation.JobDepend;
+import com.github.sofn.dagrunner.annnotation.DagDepend;
 import com.github.sofn.dagrunner.utils.AnnotationUtil;
 import com.github.sofn.dagrunner.utils.CycleDependException;
-import com.github.sofn.dagrunner.utils.JobRunnerException;
+import com.github.sofn.dagrunner.utils.DagRunnerException;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,11 +16,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2017-03-21 22:21
  */
-public class JobRunner {
-    private static final Logger log = LoggerFactory.getLogger(JobRunner.class);
+public class DagRunner {
+    private static final Logger log = LoggerFactory.getLogger(DagRunner.class);
     private Map<String, JobState<?>> jobStates = new ConcurrentHashMap<>();
     private Map<String, JobCommand<?>> allJobs = new ConcurrentHashMap<>();
     private Map<String, Object> results = new ConcurrentHashMap<>(); //保存结果
@@ -32,7 +32,7 @@ public class JobRunner {
     public <T> JobCommand<T> putJob(String jobName, JobCommand<T> job) {
         JobCommand<?> preJob = allJobs.get(jobName);
         if (preJob != null && preJob != job) { //如果任务已存在，直接报错
-            throw new JobRunnerException("job " + jobName + " already exist!");
+            throw new DagRunnerException("job " + jobName + " already exist!");
         }
         job.setJobName(jobName);
         job.setRunner(this);
@@ -75,7 +75,7 @@ public class JobRunner {
     public JobCommand<?> getEnsureExist(String jobName) {
         JobCommand<?> job = getJob(jobName);
         if (job == null) {
-            throw new JobRunnerException("depend job " + jobName + " not regist");
+            throw new DagRunnerException("depend job " + jobName + " not regist");
         }
         return job;
     }
@@ -114,7 +114,7 @@ public class JobRunner {
     public <T> T get(String jobName) {
         JobCommand<T> job = (JobCommand<T>) getJob(jobName);
         if (job == null) {
-            throw new JobRunnerException("job " + jobName + " not regist");
+            throw new DagRunnerException("job " + jobName + " not regist");
         }
 
         Object res = results.get(jobName);
@@ -158,7 +158,7 @@ public class JobRunner {
         for (Map.Entry<String, JobCommand<?>> entry : allJobs.entrySet()) {
             JobCommand<?> job = entry.getValue();
 
-            for (JobDepend annotation : AnnotationUtil.dependAnnotations(job)) {
+            for (DagDepend annotation : AnnotationUtil.dependAnnotations(job)) {
                 String annoName = annotation.jobName();
                 Class<? extends JobCommand> jobClass = annotation.value();
                 if (StringUtils.equals(annoName, "")) {
@@ -166,9 +166,9 @@ public class JobRunner {
                 } else {
                     JobCommand<?> existJob = getJob(annoName);
                     if (existJob == null) {
-                        throw new JobRunnerException("depend job: " + annoName + " not regist");
+                        throw new DagRunnerException("depend job: " + annoName + " not regist");
                     } else if (existJob.getClass() != jobClass) {
-                        throw new JobRunnerException("depend job: " + annoName + " type is " + existJob.getClass() + " but require " + jobClass);
+                        throw new DagRunnerException("depend job: " + annoName + " type is " + existJob.getClass() + " but require " + jobClass);
                     }
                     job.addDepend(annoName);
                 }
@@ -220,7 +220,7 @@ public class JobRunner {
     public <T> JobState<T> queueJob(String jobName) {
         JobCommand<T> job = (JobCommand<T>) getJob(jobName);
         if (job == null) {
-            throw new JobRunnerException("job " + jobName + " not exist");
+            throw new DagRunnerException("job " + jobName + " not exist");
         }
         return queueJob(jobName, job);
     }
@@ -262,7 +262,7 @@ public class JobRunner {
             if (result != null) {
                 this.results.put(jobName, result);
             } else {
-                log.error("JobRunner job return null, jobName: " + jobName);
+                log.error("DagRunner job return null, jobName: " + jobName);
             }
         } finally {
             state.setDone(); //设置完成状态
