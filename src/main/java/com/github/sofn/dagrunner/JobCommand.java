@@ -20,7 +20,8 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
     private boolean delay;
     private String jobName;
     private Set<String> dependencys = new HashSet<>();
-    private Map<String, JobCommand<?>> delayRunCheck = new HashMap<>(); //延迟校验，因为刚开始runner可能还没设置
+    //延迟校验，因为刚开始runner可能还没设置
+    private Map<String, JobCommand<?>> delayRunCheck = new HashMap<>();
     protected DagRunner runner;
     private boolean loged;
     private long runTime;
@@ -121,13 +122,17 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
         this.delayRunCheck.clear();
     }
 
+    /**
+     * 空实现，运行时会注入
+     */
     protected <T> T depend(Class<? extends JobCommand<T>> clazz) {
         return null;
     }
 
     @Override
     protected R getFallback() {
-        if (!loged) { //超时、队列满等报错
+        //超时、队列满等报错
+        if (!loged) {
             jobLog.error("job run error " + this.jobName, this.getExecutionException());
         }
         return null;

@@ -1,6 +1,6 @@
 package com.github.sofn.dagrunner;
 
-import com.github.sofn.dagrunner.annnotation.DagDepend;
+import com.github.sofn.dagrunner.annnotation.JobDepend;
 import com.github.sofn.dagrunner.utils.AnnotationUtil;
 import com.github.sofn.dagrunner.utils.CycleDependException;
 import com.github.sofn.dagrunner.utils.DagRunnerException;
@@ -23,7 +23,8 @@ public class DagRunner {
     private static final Logger log = LoggerFactory.getLogger(DagRunner.class);
     private Map<String, JobState<?>> jobStates = new ConcurrentHashMap<>();
     private Map<String, JobCommand<?>> allJobs = new ConcurrentHashMap<>();
-    private Map<String, Object> results = new ConcurrentHashMap<>(); //保存结果
+    //保存结果
+    private Map<String, Object> results = new ConcurrentHashMap<>();
 
     public <T> JobCommand<T> putJob(JobCommand<T> job) {
         return putJob(job.getJobName(), job);
@@ -31,7 +32,8 @@ public class DagRunner {
 
     public <T> JobCommand<T> putJob(String jobName, JobCommand<T> job) {
         JobCommand<?> preJob = allJobs.get(jobName);
-        if (preJob != null && preJob != job) { //如果任务已存在，直接报错
+        //如果任务已存在，直接报错
+        if (preJob != null && preJob != job) {
             throw new DagRunnerException("job " + jobName + " already exist!");
         }
         job.setJobName(jobName);
@@ -158,7 +160,7 @@ public class DagRunner {
         for (Map.Entry<String, JobCommand<?>> entry : allJobs.entrySet()) {
             JobCommand<?> job = entry.getValue();
 
-            for (DagDepend annotation : AnnotationUtil.dependAnnotations(job)) {
+            for (JobDepend annotation : AnnotationUtil.dependAnnotations(job)) {
                 String annoName = annotation.jobName();
                 Class<? extends JobCommand> jobClass = annotation.value();
                 if (StringUtils.equals(annoName, "")) {

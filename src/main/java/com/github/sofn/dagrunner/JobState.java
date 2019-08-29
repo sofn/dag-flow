@@ -1,6 +1,6 @@
 package com.github.sofn.dagrunner;
 
-import com.github.sofn.dagrunner.annnotation.DagDepend;
+import com.github.sofn.dagrunner.annnotation.JobDepend;
 import com.github.sofn.dagrunner.utils.AnnotationUtil;
 import com.github.sofn.dagrunner.utils.DagRunnerException;
 import org.apache.commons.lang.StringUtils;
@@ -78,7 +78,7 @@ public class JobState<R> {
 
     private void injectValue() {
         for (Field field : AnnotationUtil.jobDepends(this.job)) {
-            DagDepend annotation = field.getAnnotation(DagDepend.class);
+            JobDepend annotation = field.getAnnotation(JobDepend.class);
             Class<? extends JobCommand<?>> dependClass = annotation.value();
             try {
                 if (StringUtils.equals(annotation.jobName(), "")) {

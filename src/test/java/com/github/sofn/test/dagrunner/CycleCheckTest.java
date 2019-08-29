@@ -7,7 +7,7 @@ import com.github.sofn.test.dagrunner.example.Job2;
 import org.junit.Test;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2017-03-22 15:26
  */
 public class CycleCheckTest {

@@ -1,19 +1,19 @@
 package com.github.sofn.test.dagrunner.example;
 
 import com.github.sofn.dagrunner.JobCommand;
-import com.github.sofn.dagrunner.annnotation.DagDepend;
+import com.github.sofn.dagrunner.annnotation.JobDepend;
 import org.apache.commons.lang.time.DateFormatUtils;
 
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2017-03-21 23:16
  */
 public class Job2 extends JobCommand<String> {
 
-    @DagDepend(Job1.class)
+    @JobDepend(Job1.class)
     private String job1Result = depend(Job1.class);
 
     public Job2() {

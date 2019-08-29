@@ -5,14 +5,14 @@ import com.github.sofn.dagrunner.JobCommand;
 import java.lang.annotation.*;
 
 /**
- * Authors: sofn
- * Version: 1.0  Created at 2017-03-28 23:03.
+ * @author sofn
+ * @version 1.0 Created at 2017-03-28 23:03.
  */
 @Inherited
 @Documented
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface DagDepend {
+public @interface JobDepend {
 
     /**
      * 任务名称
