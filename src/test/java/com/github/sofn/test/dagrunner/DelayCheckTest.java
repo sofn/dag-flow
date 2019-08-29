@@ -16,7 +16,7 @@ public class DelayCheckTest {
         DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         Job2 job2 = new Job2();
-        runner.putJob(job2.addDepend(job1));
+        runner.registerJob(job2.addDepend(job1));
         runner.startJobs();
         System.out.println(runner.get(job2));
     }
@@ -26,8 +26,8 @@ public class DelayCheckTest {
         DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         Job2 job2 = new Job2();
-        runner.putJob(job2.addDepend(Job1.class));
-        runner.putJob(job1);
+        runner.registerJob(job2.addDepend(Job1.class));
+        runner.registerJob(job1);
         runner.startJobs();
         System.out.println(runner.get(job2));
     }
@@ -38,8 +38,8 @@ public class DelayCheckTest {
         Job1 job1 = new Job1();
         job1.addDepend("myjob1", new Job1().addDepend("myjob2", new Job1()));
         Job2 job2 = new Job2();
-        runner.putJob(job2.addDepend(Job1.class));
-        runner.putJob(job1);
+        runner.registerJob(job2.addDepend(Job1.class));
+        runner.registerJob(job1);
         runner.startJobs();
         System.out.println(runner.get(job2));
     }

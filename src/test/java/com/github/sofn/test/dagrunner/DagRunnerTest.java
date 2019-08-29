@@ -26,7 +26,7 @@ public class DagRunnerTest {
     public void test02() throws ExecutionException, InterruptedException {
         DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
-        runner.putJob(job1);
+        runner.registerJob(job1);
         runner.startJobs();
         System.out.println(runner.get(job1));
     }
@@ -36,8 +36,8 @@ public class DagRunnerTest {
         DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         Job2 job2 = new Job2();
-        runner.putJob(job1);
-        runner.putJob(job2).addDepend(job1);
+        runner.registerJob(job1);
+        runner.registerJob(job2).addDepend(job1);
         runner.startJobs();
         TimeUnit.SECONDS.sleep(3);
         System.out.println(runner.get(job1));
@@ -49,8 +49,8 @@ public class DagRunnerTest {
         Job1 job1 = new Job1();
         job1.setDelay(true);
         Job2 job2 = new Job2();
-        runner.putJob(job1);
-        runner.putJob(job2).addDepend(job1);
+        runner.registerJob(job1);
+        runner.registerJob(job2).addDepend(job1);
         runner.startJobs();
         System.out.println(runner.get(job2));
     }

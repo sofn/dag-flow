@@ -17,7 +17,7 @@ public class CycleCheckTest {
         DagRunner runner = new DagRunner();
         Job1 job1 = new Job1();
         job1.addDepend(job1);
-        runner.putJob(job1);
+        runner.registerJob(job1);
         runner.startJobs();
         System.out.println(runner.get(job1));
     }
@@ -29,8 +29,8 @@ public class CycleCheckTest {
         Job2 job2 = new Job2();
         job1.addDepend(job2);
         job2.addDepend(job1);
-        runner.putJob(job1);
-        runner.putJob(job2);
+        runner.registerJob(job1);
+        runner.registerJob(job2);
         runner.startJobs();
     }
 

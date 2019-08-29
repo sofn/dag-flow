@@ -23,14 +23,18 @@ public class DagRunner {
     private static final Logger log = LoggerFactory.getLogger(DagRunner.class);
     private Map<String, JobState<?>> jobStates = new ConcurrentHashMap<>();
     private Map<String, JobCommand<?>> allJobs = new ConcurrentHashMap<>();
-    //保存结果
+    /**
+     * 保存结果
+     */
     private Map<String, Object> results = new ConcurrentHashMap<>();
 
-    public <T> JobCommand<T> putJob(JobCommand<T> job) {
-        return putJob(job.getJobName(), job);
+    public void registerJob(JobCommand<?>... jobs) {
+        for (JobCommand<?> job : jobs) {
+            registerJob(job.getJobName(), job);
+        }
     }
 
-    public <T> JobCommand<T> putJob(String jobName, JobCommand<T> job) {
+    public void registerJob(String jobName, JobCommand<?> job) {
         JobCommand<?> preJob = allJobs.get(jobName);
         //如果任务已存在，直接报错
         if (preJob != null && preJob != job) {
@@ -39,10 +43,16 @@ public class DagRunner {
         job.setJobName(jobName);
         job.setRunner(this);
         allJobs.put(jobName, job);
-        return job;
     }
 
-    //直接存放结果
+    /**
+     * 直接存放结果
+     *
+     * @param clazz class
+     * @param value value
+     * @param <T>   type
+     * @return true or false
+     */
     public <T> boolean putVal(Class<JobCommand<T>> clazz, T value) {
         return putVal(getDefaultJobName(clazz), value);
     }
@@ -230,7 +240,7 @@ public class DagRunner {
     @SuppressWarnings("unchecked")
     public <T> JobState<T> queueJob(String jobName, JobCommand<T> job) {
         if (this.getJob(jobName) == null) {
-            putJob(jobName, job);
+            registerJob(jobName, job);
         }
         log.debug("queueJob " + jobName);
         JobState<T> jobState = (JobState<T>) jobStates.computeIfAbsent(job.getJobName(), name -> new JobState<>(this, job));
@@ -252,7 +262,7 @@ public class DagRunner {
      */
     public <T> T doJob(String jobName, JobCommand<T> job) throws InterruptedException, ExecutionException {
         if (this.getJob(jobName) == null) {
-            putJob(jobName, job);
+            registerJob(jobName, job);
         }
 
         final JobState<T> state = queueJob(job);

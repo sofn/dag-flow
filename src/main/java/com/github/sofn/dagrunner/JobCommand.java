@@ -80,7 +80,7 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
         if (runner != null) {
             JobCommand<?> job = runner.getJob(jobName);
             if (job == null) {
-                runner.putJob(jobName, depend);
+                runner.registerJob(jobName, depend);
             }
         } else {
             delayRunCheck.putIfAbsent(jobName, depend);
@@ -109,7 +109,7 @@ public abstract class JobCommand<R> extends HystrixCommand<R> {
             if (job != null) {
                 JobCommand<?> existJob = runner.getJob(jobName);
                 if (existJob == null) {
-                    runner.putJob(jobName, job);
+                    runner.registerJob(jobName, job);
                     job.delayCheck();
                 } else if (existJob != job && StringUtils.equals(this.jobName, existJob.jobName)) {
                     throw new DagRunnerException("multi job: " + jobName);

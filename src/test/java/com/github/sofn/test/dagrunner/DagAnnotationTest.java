@@ -14,8 +14,8 @@ public class DagAnnotationTest {
     @Test
     public void test01() {
         DagRunner runner = new DagRunner();
-        runner.putJob(new Job1());
-        runner.putJob(new Job2());
+        runner.registerJob(new Job1());
+        runner.registerJob(new Job2());
         runner.startJobs();
         System.out.println(runner.get(Job2.class));
     }
