@@ -1,5 +1,4 @@
 apply plugin: 'idea'
-apply plugin: 'maven'
 apply plugin: 'java'
 
 group 'com.github.sofn'
@@ -10,30 +9,15 @@ targetCompatibility = 1.8
 
 repositories {
     mavenLocal()
-    maven { url "https://dl.bintray.com/netflixoss/maven/" }
+    'maven(https://maven.aliyun.com/nexus/content/groups/public/)'
     mavenCentral()
 }
 
 dependencies {
-    compile "com.netflix.hystrix:hystrix-core:$hystrixVersion"
-    testCompile "junit:junit:$junitVersion"
-}
-
-//idea插件会默认下载source和doc文件
-idea {
-    module {
-        downloadJavadoc = false
-        downloadSources = false
-        inheritOutputDirs = false
-        outputDir = file("$buildDir/classes/main/")
-    }
+    implementation "com.netflix.hystrix:hystrix-core:$hystrixVersion"
+    testImplementation "junit:junit:$junitVersion"
 }
 
 tasks.withType(JavaCompile) {
     options.encoding = "UTF-8"
-}
-
-//执行gradle wrapper自动生成gradlew脚本及配置
-task wrapper(type: Wrapper) {
-    gradleVersion = '4.3.1'
 }
