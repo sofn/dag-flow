@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration status="info">
+    <appenders>
+        <Console name="Console" target="SYSTEM_OUT" follow="true">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %t %-5level %logger{30} %msg%n"/>
+        </Console>
+    </appenders>
+    <loggers>
+        <logger name="com.meituan.service.inf.kms" level="off"/>
+        <logger name="com.meituan.service.mobile.mtthrift" level="error"/>
+        <logger name="com.dianping.lion.client" level="error"/>
+        <logger name="org.hibernate.engine" level="warn"/>
+
+        <root level="info">
+            <appender-ref ref="Console"/>
+        </root>
+    </loggers>
+</configuration>

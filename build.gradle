@@ -4,20 +4,40 @@ apply plugin: 'java'
 group 'com.github.sofn'
 version '1.0-SNAPSHOT'
 
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
-
 repositories {
+    maven { url 'https://maven.aliyun.com/repository/public/' }
     mavenLocal()
-    'maven(https://maven.aliyun.com/nexus/content/groups/public/)'
     mavenCentral()
 }
 
 dependencies {
-    implementation "com.netflix.hystrix:hystrix-core:$hystrixVersion"
-    testImplementation "junit:junit:$junitVersion"
+    implementation "org.apache.commons:commons-lang3:3.12.0"
+    implementation "org.apache.commons:commons-collections4:4.4"
+    implementation "com.google.guava:guava:31.0.1-jre"
+    implementation "org.jooq:jool:0.9.14"
+    implementation "com.netflix.hystrix:hystrix-core:1.5.18"
+
+    compileOnly "org.springframework:spring-context:5.3.14"
+    //注解处理
+    compileOnly "org.projectlombok:lombok:1.18.22"
+    annotationProcessor "org.projectlombok:lombok:1.18.22"
+    //测试
+    testCompileOnly "org.projectlombok:lombok:1.18.22"
+    testAnnotationProcessor "org.projectlombok:lombok:1.18.22"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.8.2"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.8.2"
+    testImplementation "org.apache.logging.log4j:log4j-core:2.17.0"
 }
 
-tasks.withType(JavaCompile) {
-    options.encoding = "UTF-8"
+allprojects {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+
+    tasks.withType(JavaCompile) {
+        options.encoding = "UTF-8"
+    }
+
+    test {
+        useJUnitPlatform()
+    }
 }
