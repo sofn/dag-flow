@@ -8,7 +8,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2021-11-04 17:22
  */
 public class BatchJob1 implements BatchCommand<Test2Context, Long, String> {

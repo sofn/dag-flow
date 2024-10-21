@@ -7,7 +7,7 @@ import lombok.EqualsAndHashCode;
 import java.util.List;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2020-11-06 20:33
  */
 @Data

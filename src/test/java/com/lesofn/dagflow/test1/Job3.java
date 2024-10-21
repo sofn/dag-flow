@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Node默认单例
  *
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2020-10-29 16:04
  */
 @Slf4j

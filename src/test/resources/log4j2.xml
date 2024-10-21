@@ -2,14 +2,12 @@
 <configuration status="info">
     <appenders>
         <Console name="Console" target="SYSTEM_OUT" follow="true">
-            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %t %-5level %logger{30} %msg%n"/>
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5level%t %l %msg%n" />
         </Console>
     </appenders>
     <loggers>
-        <logger name="com.meituan.service.inf.kms" level="off"/>
-        <logger name="com.meituan.service.mobile.mtthrift" level="error"/>
-        <logger name="com.dianping.lion.client" level="error"/>
-        <logger name="org.hibernate.engine" level="warn"/>
+        <logger name="org.apache.logging" level="off"/>
+        <logger name="com.lesofn" level="debug"/>
 
         <root level="info">
             <appender-ref ref="Console"/>

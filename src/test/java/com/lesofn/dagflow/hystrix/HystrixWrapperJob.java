@@ -8,7 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 添加依赖，并注入JobFlow的Context
  *
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2020-10-29 16:04
  */
 @Slf4j

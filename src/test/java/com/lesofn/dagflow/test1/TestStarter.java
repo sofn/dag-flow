@@ -9,7 +9,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2020-10-29 15:46
  */
 class TestStarter {

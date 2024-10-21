@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2021-11-04 12:15
  */
 class DagDagNodeCheckTest {

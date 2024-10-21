@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 任务依赖
  *
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2022-01-19 12:20
  */
 public interface DagFlowDepend<C extends DagFlowContext> {

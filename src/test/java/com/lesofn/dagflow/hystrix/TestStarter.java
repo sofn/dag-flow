@@ -10,7 +10,7 @@ import java.util.concurrent.ExecutionException;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
- * @author lishaofeng
+ * @author sofn
  * @version 1.0 Created at: 2020-10-29 15:46
  */
 class TestStarter {

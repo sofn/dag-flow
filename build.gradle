@@ -17,16 +17,16 @@ dependencies {
     implementation "org.jooq:jool:0.9.14"
     implementation "com.netflix.hystrix:hystrix-core:1.5.18"
 
-    compileOnly 'org.springframework:spring-context:5.3.19'
-    //注解处理
+    compileOnly 'org.springframework:spring-context:6.1.14'
     compileOnly "org.projectlombok:lombok:1.18.22"
     annotationProcessor "org.projectlombok:lombok:1.18.22"
-    //测试
+    //test
     testCompileOnly "org.projectlombok:lombok:1.18.22"
     testAnnotationProcessor "org.projectlombok:lombok:1.18.22"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.8.2"
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.8.2"
     testImplementation "org.apache.logging.log4j:log4j-core:2.24.1"
+    testImplementation 'org.apache.logging.log4j:log4j-slf4j2-impl:2.24.1'
 }
 
 allprojects {
