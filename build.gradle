@@ -1,7 +1,7 @@
 apply plugin: 'idea'
 apply plugin: 'java'
 
-group 'com.github.sofn'
+group 'com.lesofn'
 version '1.0-SNAPSHOT'
 
 repositories {
@@ -13,11 +13,11 @@ repositories {
 dependencies {
     implementation "org.apache.commons:commons-lang3:3.12.0"
     implementation "org.apache.commons:commons-collections4:4.4"
-    implementation "com.google.guava:guava:31.0.1-jre"
+    implementation "com.google.guava:guava:33.3.1-jre"
     implementation "org.jooq:jool:0.9.14"
     implementation "com.netflix.hystrix:hystrix-core:1.5.18"
 
-    compileOnly "org.springframework:spring-context:5.3.14"
+    compileOnly 'org.springframework:spring-context:5.3.19'
     //注解处理
     compileOnly "org.projectlombok:lombok:1.18.22"
     annotationProcessor "org.projectlombok:lombok:1.18.22"
@@ -26,12 +26,12 @@ dependencies {
     testAnnotationProcessor "org.projectlombok:lombok:1.18.22"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.8.2"
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.8.2"
-    testImplementation "org.apache.logging.log4j:log4j-core:2.17.0"
+    testImplementation "org.apache.logging.log4j:log4j-core:2.24.1"
 }
 
 allprojects {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 
     tasks.withType(JavaCompile) {
         options.encoding = "UTF-8"
