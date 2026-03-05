@@ -18,11 +18,11 @@ dependencies {
     implementation "com.netflix.hystrix:hystrix-core:1.5.18"
 
     compileOnly 'org.springframework:spring-context:6.1.14'
-    compileOnly "org.projectlombok:lombok:1.18.22"
-    annotationProcessor "org.projectlombok:lombok:1.18.22"
+    compileOnly "org.projectlombok:lombok:1.18.34"
+    annotationProcessor "org.projectlombok:lombok:1.18.34"
     //test
-    testCompileOnly "org.projectlombok:lombok:1.18.22"
-    testAnnotationProcessor "org.projectlombok:lombok:1.18.22"
+    testCompileOnly "org.projectlombok:lombok:1.18.34"
+    testAnnotationProcessor "org.projectlombok:lombok:1.18.34"
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:5.8.2"
     testImplementation "org.junit.jupiter:junit-jupiter-api:5.8.2"
     testImplementation "org.apache.logging.log4j:log4j-core:2.24.1"

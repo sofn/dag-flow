@@ -16,7 +16,7 @@ public class OriginHystrixJob extends HystrixCommand<String> {
         super(HystrixCommand.Setter.withGroupKey(HystrixCommandGroupKey.Factory.asKey("test"))
                 .andThreadPoolKey(HystrixThreadPoolKey.Factory.asKey("TestThreadPool"))
                 .andThreadPoolPropertiesDefaults(HystrixThreadPoolProperties.Setter().withCoreSize(2))
-                .andCommandPropertiesDefaults(HystrixCommandProperties.Setter().withExecutionTimeoutInMilliseconds(10))
+                .andCommandPropertiesDefaults(HystrixCommandProperties.Setter().withExecutionTimeoutInMilliseconds(1000))
         );
     }
 
