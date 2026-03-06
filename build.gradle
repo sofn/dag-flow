@@ -24,7 +24,20 @@ subprojects {
     }
 
     test {
-        useJUnitPlatform()
+        useJUnitPlatform {
+            excludeTags 'benchmark'
+        }
+    }
+
+    tasks.register('benchmark', Test) {
+        description = 'Run performance benchmark tests'
+        group = 'verification'
+        useJUnitPlatform {
+            includeTags 'benchmark'
+        }
+        testLogging {
+            showStandardStreams = true
+        }
     }
 
     dependencies {

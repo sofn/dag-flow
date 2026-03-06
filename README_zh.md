@@ -363,6 +363,30 @@ dag-flow/
         └── DagFlowProperties.java           # dagflow.enabled 配置
 ```
 
+## 性能基准测试
+
+传统线程池 vs 虚拟线程对比（Java 21, 8 vCPU）：
+
+| 场景 | 传统线程池 | 虚拟线程 | 加速比 |
+|---|---|---|---|
+| 10 个并行 I/O 节点（每个 100ms） | 200.97 ms | 101.24 ms | **1.99x** |
+| 50 个并行 I/O 节点（每个 50ms） | 302.88 ms | 58.43 ms | **5.18x** |
+| 100 个并行 I/O 节点（每个 20ms） | 222.91 ms | 26.19 ms | **8.51x** |
+| 8 个并行 CPU 节点 | 4.65 ms | 4.47 ms | 1.04x |
+| 混合 DAG（5 I/O → CPU → I/O） | 102.71 ms | 102.53 ms | 1.00x |
+| 多层 DAG（3 层 × 10 节点，30ms） | 121.80 ms | 62.03 ms | **1.96x** |
+
+**关键结论：**
+- 虚拟线程在 **I/O 密集型** 场景表现突出 — 100 个并发阻塞节点时最高 **8.5 倍**提速
+- 对于 **CPU 密集型** 任务，性能基本持平（虚拟线程几乎无额外开销）
+- 并发 I/O 节点越多，虚拟线程相比固定大小线程池的优势越明显
+
+自行运行基准测试：
+
+```bash
+./gradlew :dag-flow-core:benchmark    # 仅运行基准测试（不包含在默认 test 中）
+```
+
 ## 构建与测试
 
 ```bash
@@ -372,6 +396,7 @@ dag-flow/
 ./gradlew :dag-flow-hystrix:test               # 仅运行 Hystrix 测试
 ./gradlew :dag-flow-resilience4j:test          # 仅运行 Resilience4j 测试
 ./gradlew :dag-flow-spring-boot-starter:test   # 仅运行 Spring Boot Starter 测试
+./gradlew :dag-flow-core:benchmark             # 运行性能基准测试
 ./gradlew clean build                           # 清理后构建
 ```
 

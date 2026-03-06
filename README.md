@@ -363,6 +363,30 @@ dag-flow/
         └── DagFlowProperties.java           # dagflow.enabled configuration
 ```
 
+## Performance Benchmark
+
+Platform thread pool vs Virtual threads comparison (Java 21, 8 vCPU):
+
+| Scenario | Platform Threads | Virtual Threads | Speedup |
+|---|---|---|---|
+| 10 Parallel I/O (100ms each) | 200.97 ms | 101.24 ms | **1.99x** |
+| 50 Parallel I/O (50ms each) | 302.88 ms | 58.43 ms | **5.18x** |
+| 100 Parallel I/O (20ms each) | 222.91 ms | 26.19 ms | **8.51x** |
+| 8 Parallel CPU Nodes | 4.65 ms | 4.47 ms | 1.04x |
+| Mixed DAG (5 I/O → CPU → I/O) | 102.71 ms | 102.53 ms | 1.00x |
+| Multi-Layer DAG (3×10, 30ms) | 121.80 ms | 62.03 ms | **1.96x** |
+
+**Key takeaways:**
+- Virtual threads excel at **I/O-bound** workloads — up to **8.5x faster** with 100 concurrent blocking nodes
+- For **CPU-bound** tasks, performance is comparable (virtual threads add negligible overhead)
+- The more concurrent I/O nodes, the greater the advantage of virtual threads over fixed-size thread pools
+
+Run benchmarks yourself:
+
+```bash
+./gradlew :dag-flow-core:benchmark    # Benchmarks only (excluded from default test)
+```
+
 ## Build & Test
 
 ```bash
@@ -372,6 +396,7 @@ dag-flow/
 ./gradlew :dag-flow-hystrix:test               # Run Hystrix tests only
 ./gradlew :dag-flow-resilience4j:test          # Run Resilience4j tests only
 ./gradlew :dag-flow-spring-boot-starter:test   # Run Spring Boot Starter tests only
+./gradlew :dag-flow-core:benchmark             # Run performance benchmarks
 ./gradlew clean build                           # Clean build
 ```
 
