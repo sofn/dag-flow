@@ -5,6 +5,7 @@ import com.lesofn.dagflow.api.context.DagFlowContext;
 import com.lesofn.dagflow.api.function.ConsumerCommand;
 import com.lesofn.dagflow.api.function.FunctionCommand;
 import com.lesofn.dagflow.exception.DagFlowBuildException;
+import com.lesofn.dagflow.executor.DagFlowDefaultExecutor;
 import com.lesofn.dagflow.model.DagNode;
 import com.lesofn.dagflow.model.DagNodeFactory;
 
@@ -24,6 +25,11 @@ public class JobBuilder<C extends DagFlowContext> {
     protected final DagNodeFactory<C> nodeFactory = new DagNodeFactory<>();
 
     protected DagNode<C, ?> currentNode;
+
+    /**
+     * 全局执行器覆盖，用于虚拟线程等场景
+     */
+    protected Executor executorOverride;
 
     /**
      * @param commandClass 要执行的job
@@ -104,10 +110,21 @@ public class JobBuilder<C extends DagFlowContext> {
         return this;
     }
 
+    /**
+     * 启用虚拟线程执行器 (Java 21+)，所有非 SyncCommand 节点将在虚拟线程上执行
+     */
+    public JobBuilder<C> useVirtualThreads() {
+        this.executorOverride = DagFlowDefaultExecutor.newVirtualThreadExecutor();
+        return this;
+    }
+
     public JobRunner<C> run(C context) throws ExecutionException, InterruptedException {
         JobRunner<C> runner = new JobRunner<>();
         //每次运行，都执行一次初始化，重置状态
-        nodeFactory.getNodes().forEach(DagNode::init);
+        nodeFactory.getNodes().forEach(node -> {
+            node.init();
+            node.setExecutorOverride(executorOverride);
+        });
         return runner.run(context, this.nodeFactory);
     }
 

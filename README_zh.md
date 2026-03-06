@@ -6,7 +6,7 @@
 
 声明任务依赖关系，框架自动最大化并行度，简化多线程任务编排开发。
 
-[![Java](https://img.shields.io/badge/Java-17%2B-blue?logo=openjdk)](https://openjdk.org/)
+[![Java](https://img.shields.io/badge/Java-21%2B-blue?logo=openjdk)](https://openjdk.org/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.10-02303A?logo=gradle)](https://gradle.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 
@@ -27,6 +27,7 @@
 - **Hystrix 集成** — `dag-flow-hystrix` 模块将 Netflix `HystrixCommand` 包装为 DAG 节点
 - **Resilience4j 集成** — `dag-flow-resilience4j` 模块提供熔断器、重试、隔离仓、限流器、超时控制等能力
 - **Spring Boot Starter** — `dag-flow-spring-boot-starter` 自动配置 dag-flow 引擎，`dependSpringBean()` 开箱即用
+- **虚拟线程** — `useVirtualThreads()` 启用 Java 21 虚拟线程，所有非 SyncCommand 节点在虚拟线程上执行；传统线程池作为默认模式保留
 - **智能线程池** — I/O 池（2x–8x 核心数）和 CPU 池（核心数+1），拒绝策略为 `CallerRunsPolicy`
 - **错误传播** — 节点异常以 `ExecutionException` 传播，下游节点自动取消
 
@@ -292,6 +293,23 @@ new JobBuilder<OrderContext>()
 dagflow.enabled=false
 ```
 
+### 虚拟线程 (Java 21+)
+
+一行代码启用虚拟线程：
+
+```java
+JobRunner<MyContext> runner = new JobBuilder<MyContext>()
+        .useVirtualThreads()                   // 启用虚拟线程
+        .addNode(FetchOrder.class)             // AsyncCommand → 虚拟线程
+        .addNode(FetchUser.class)              // AsyncCommand → 虚拟线程
+        .addNode(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
+        .run(context);
+```
+
+- `SyncCommand` — 仍在调用线程上执行（不变）
+- `AsyncCommand` / `CalcCommand` — 在虚拟线程上执行，替代传统线程池
+- 不调用 `useVirtualThreads()` 时，使用传统 I/O 和 CPU 线程池（默认行为）
+
 ### 自定义线程池
 
 为特定节点覆盖默认线程池：
@@ -359,7 +377,7 @@ dag-flow/
 
 ## 环境要求
 
-- **Java** 17+
+- **Java** 21+
 - **Gradle** 8.10+（已包含 Wrapper）
 
 ## 许可证

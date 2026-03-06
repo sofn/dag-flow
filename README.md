@@ -6,7 +6,7 @@
 
 Simplify multi-threaded task orchestration — declare dependencies, and the framework maximizes parallelism automatically.
 
-[![Java](https://img.shields.io/badge/Java-17%2B-blue?logo=openjdk)](https://openjdk.org/)
+[![Java](https://img.shields.io/badge/Java-21%2B-blue?logo=openjdk)](https://openjdk.org/)
 [![Gradle](https://img.shields.io/badge/Gradle-8.10-02303A?logo=gradle)](https://gradle.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 
@@ -27,6 +27,7 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 - **Hystrix integration** — `dag-flow-hystrix` module wraps Netflix `HystrixCommand` into the DAG
 - **Resilience4j integration** — `dag-flow-resilience4j` module provides CircuitBreaker, Retry, Bulkhead, RateLimiter, TimeLimiter support
 - **Spring Boot Starter** — `dag-flow-spring-boot-starter` auto-configures dag-flow engine; `dependSpringBean()` works out of the box
+- **Virtual threads** — `useVirtualThreads()` enables Java 21 virtual threads for all non-sync nodes; traditional thread pools remain the default
 - **Smart thread pools** — I/O pool (2x–8x cores) and CPU pool (cores+1) with `CallerRunsPolicy`
 - **Error propagation** — Node exceptions propagate as `ExecutionException`; downstream nodes are cancelled
 
@@ -292,6 +293,23 @@ Configuration via `application.properties` / `application.yml`:
 dagflow.enabled=false
 ```
 
+### Virtual Threads (Java 21+)
+
+Enable virtual threads for all non-sync nodes with a single call:
+
+```java
+JobRunner<MyContext> runner = new JobBuilder<MyContext>()
+        .useVirtualThreads()                   // enable virtual threads
+        .addNode(FetchOrder.class)             // AsyncCommand → virtual thread
+        .addNode(FetchUser.class)              // AsyncCommand → virtual thread
+        .addNode(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
+        .run(context);
+```
+
+- `SyncCommand` — still runs on the caller thread (unchanged)
+- `AsyncCommand` / `CalcCommand` — runs on virtual threads instead of platform thread pools
+- Without `useVirtualThreads()`, the traditional I/O and CPU thread pools are used (default behavior)
+
 ### Custom Executor
 
 Override the default thread pool for specific nodes:
@@ -359,7 +377,7 @@ dag-flow/
 
 ## Requirements
 
-- **Java** 17+
+- **Java** 21+
 - **Gradle** 8.10+ (wrapper included)
 
 ## License

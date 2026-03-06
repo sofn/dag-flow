@@ -4,7 +4,7 @@ DAG-based multi-threaded parallel computation framework in Java. Simplifies deve
 
 ## Project Info
 
-- **Language:** Java 17
+- **Language:** Java 21
 - **Build:** Gradle 8.10.2 (wrapper), multi-module project
 - **Group:** `com.lesofn`
 - **Package:** `com.lesofn.dagflow`
@@ -38,7 +38,7 @@ DAG-based multi-threaded parallel computation framework in Java. Simplifies deve
 2. **Context** (`api/context/`) — `DagFlowContext` (abstract, user-subclassed), `DagFlowContextInjection` (context injection for extensions)
 3. **Model** (`model/`) — `DagNode` (runtime node with future), `DagNodeFactory` (creation/registry), `DagNodeCheck` (DFS cycle detection)
 4. **Builder/Runner** — `JobBuilder` (fluent DAG construction, extensible), `JobRunner` (CompletableFuture-based execution engine)
-5. **Executor** (`executor/`) — Default thread pools: `ASYNC_DEFAULT_EXECUTOR` (I/O, 2x-8x CPU), `CALC_DEFAULT_EXECUTOR` (CPU, cores+1)
+5. **Executor** (`executor/`) — Default thread pools: `ASYNC_DEFAULT_EXECUTOR` (I/O, 2x-8x CPU), `CALC_DEFAULT_EXECUTOR` (CPU, cores+1), `newVirtualThreadExecutor()` (Java 21 virtual threads)
 6. **Spring** (`spring/`) — Optional Spring integration via `SpringContextHolder`
 
 ### Hystrix Module (`dag-flow-hystrix`)

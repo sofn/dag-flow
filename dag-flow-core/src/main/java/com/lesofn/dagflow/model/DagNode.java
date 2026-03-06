@@ -53,6 +53,11 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
      */
     private CompletableFuture<Object> future;
 
+    /**
+     * 执行器覆盖（如虚拟线程），优先级高于命令默认执行器
+     */
+    private Executor executorOverride;
+
     private volatile boolean started;
 
     public DagNode(String name) {
@@ -120,10 +125,15 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
     }
 
     private Executor getExecutor() {
-        Executor executor = null;
         if (this.instance instanceof SyncCommand) {
             return null;
-        } else if (this.instance instanceof AsyncCommand) {
+        }
+        //全局执行器覆盖（如虚拟线程）
+        if (executorOverride != null) {
+            return executorOverride;
+        }
+        Executor executor = null;
+        if (this.instance instanceof AsyncCommand) {
             executor = ((AsyncCommand<?, ?>) this.instance).executor();
             if (executor == null) {
                 executor = DagFlowDefaultExecutor.ASYNC_DEFAULT_EXECUTOR;

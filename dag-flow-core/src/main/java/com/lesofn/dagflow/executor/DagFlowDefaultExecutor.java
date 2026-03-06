@@ -4,6 +4,7 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +37,13 @@ public class DagFlowDefaultExecutor {
             new LinkedBlockingQueue<>(Runtime.getRuntime().availableProcessors() * 4),
             new ThreadFactoryBuilder().setNameFormat("dagflow_calc_default-%d").build(),
             new CallerRunsPolicyWithMonitor());
+
+    /**
+     * 创建虚拟线程执行器 (Java 21+)
+     */
+    public static ExecutorService newVirtualThreadExecutor() {
+        return Executors.newVirtualThreadPerTaskExecutor();
+    }
 
     private static class CallerRunsPolicyWithMonitor extends ThreadPoolExecutor.CallerRunsPolicy {
         @Override
