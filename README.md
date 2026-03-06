@@ -26,7 +26,7 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 - **Extensible architecture** — `JobBuilder` is designed for extension; create custom builders for third-party integrations
 - **Hystrix integration** — `dag-flow-hystrix` module wraps Netflix `HystrixCommand` into the DAG
 - **Resilience4j integration** — `dag-flow-resilience4j` module provides CircuitBreaker, Retry, Bulkhead, RateLimiter, TimeLimiter support
-- **Spring integration** — Optional; resolve Spring beans as DAG nodes via `dependSpringBean()`
+- **Spring Boot Starter** — `dag-flow-spring-boot-starter` auto-configures dag-flow engine; `dependSpringBean()` works out of the box
 - **Smart thread pools** — I/O pool (2x–8x cores) and CPU pool (cores+1) with `CallerRunsPolicy`
 - **Error propagation** — Node exceptions propagate as `ExecutionException`; downstream nodes are cancelled
 
@@ -37,6 +37,7 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 | `dag-flow-core` | Core framework: DAG builder, runner, command API, thread pools |
 | `dag-flow-hystrix` | Netflix Hystrix extension |
 | `dag-flow-resilience4j` | Resilience4j extension (CircuitBreaker, Retry, Bulkhead, RateLimiter, TimeLimiter) |
+| `dag-flow-spring-boot-starter` | Spring Boot 4 auto-configuration starter |
 
 ## Quick Start
 
@@ -48,6 +49,9 @@ Add to your `build.gradle`:
 dependencies {
     // Core (required)
     implementation 'com.lesofn:dag-flow-core:1.0-SNAPSHOT'
+
+    // Spring Boot Starter (optional — auto-configures dag-flow in Spring Boot apps)
+    implementation 'com.lesofn:dag-flow-spring-boot-starter:1.0-SNAPSHOT'
 
     // Hystrix extension (optional)
     implementation 'com.lesofn:dag-flow-hystrix:1.0-SNAPSHOT'
@@ -250,15 +254,42 @@ JobRunner<MyContext> runner = new Resilience4jJobBuilder<MyContext>()
 
 Supported decorators: `CircuitBreaker`, `Retry`, `Bulkhead`, `RateLimiter`, `TimeLimiter` — can be combined freely.
 
-### Spring Integration
+### Spring Boot Starter
 
-Resolve Spring beans as DAG nodes (requires `spring-context` on classpath):
+Add `dag-flow-spring-boot-starter` to auto-configure the dag-flow engine in Spring Boot applications:
+
+```groovy
+// build.gradle
+implementation 'com.lesofn:dag-flow-spring-boot-starter:1.0-SNAPSHOT'
+```
+
+Once installed, `SpringContextHolder` is auto-registered and `dependSpringBean()` works out of the box — no manual configuration needed:
 
 ```java
-new JobBuilder<MyContext>()
-        .addNode(MyService.class)
-        .dependSpringBean("anotherService")
+// Spring beans that implement DagFlowCommand can be used as DAG nodes
+@Component
+public class OrderService implements AsyncCommand<OrderContext, Order> {
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Override
+    public Order run(OrderContext context) {
+        return orderRepository.findById(context.getOrderId());
+    }
+}
+
+// Reference Spring beans by name in DAG construction
+new JobBuilder<OrderContext>()
+        .addNode(CalcDiscount.class)
+        .dependSpringBean("orderService")   // resolved from Spring ApplicationContext
         .run(context);
+```
+
+Configuration via `application.properties` / `application.yml`:
+
+```properties
+# Disable dag-flow auto-configuration (default: true)
+dagflow.enabled=false
 ```
 
 ### Custom Executor
@@ -304,21 +335,26 @@ dag-flow/
 │   └── src/main/java/com/lesofn/dagflow/hystrix/
 │       ├── HystrixCommandWrapper.java       # HystrixCommand → SyncCommand adapter
 │       └── HystrixJobBuilder.java           # Builder with addHystrixNode()
-└── dag-flow-resilience4j/                   # Resilience4j extension module
-    └── src/main/java/com/lesofn/dagflow/resilience4j/
-        ├── Resilience4jCommand.java         # Resilience4j decorator wrapper
-        └── Resilience4jJobBuilder.java      # Builder with addResilience4jNode()
+├── dag-flow-resilience4j/                   # Resilience4j extension module
+│   └── src/main/java/com/lesofn/dagflow/resilience4j/
+│       ├── Resilience4jCommand.java         # Resilience4j decorator wrapper
+│       └── Resilience4jJobBuilder.java      # Builder with addResilience4jNode()
+└── dag-flow-spring-boot-starter/            # Spring Boot 4 auto-configuration starter
+    └── src/main/java/com/lesofn/dagflow/spring/boot/autoconfigure/
+        ├── DagFlowAutoConfiguration.java    # Auto-registers SpringContextHolder
+        └── DagFlowProperties.java           # dagflow.enabled configuration
 ```
 
 ## Build & Test
 
 ```bash
-./gradlew build                        # Build all modules
-./gradlew test                         # Run all tests (Spock + JUnit Platform)
-./gradlew :dag-flow-core:test         # Run core tests only
-./gradlew :dag-flow-hystrix:test      # Run Hystrix tests only
-./gradlew :dag-flow-resilience4j:test # Run Resilience4j tests only
-./gradlew clean build                  # Clean build
+./gradlew build                                 # Build all modules
+./gradlew test                                  # Run all tests (Spock + JUnit Platform)
+./gradlew :dag-flow-core:test                  # Run core tests only
+./gradlew :dag-flow-hystrix:test               # Run Hystrix tests only
+./gradlew :dag-flow-resilience4j:test          # Run Resilience4j tests only
+./gradlew :dag-flow-spring-boot-starter:test   # Run Spring Boot Starter tests only
+./gradlew clean build                           # Clean build
 ```
 
 ## Requirements

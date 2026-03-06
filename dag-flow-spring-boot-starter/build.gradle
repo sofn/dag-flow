@@ -1,0 +1,14 @@
+dependencies {
+    implementation project(':dag-flow-core')
+    implementation 'org.springframework.boot:spring-boot-autoconfigure:4.0.3'
+
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor:4.0.3'
+
+    testImplementation('org.springframework.boot:spring-boot-starter-test:4.0.3') {
+        exclude module: 'spring-boot-starter-logging'
+    }
+    testImplementation('org.springframework.boot:spring-boot-starter:4.0.3') {
+        exclude module: 'spring-boot-starter-logging'
+    }
+    testImplementation "org.spockframework:spock-spring"
+}

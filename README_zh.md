@@ -26,7 +26,7 @@
 - **可扩展架构** — `JobBuilder` 支持继承扩展，方便接入第三方容错框架
 - **Hystrix 集成** — `dag-flow-hystrix` 模块将 Netflix `HystrixCommand` 包装为 DAG 节点
 - **Resilience4j 集成** — `dag-flow-resilience4j` 模块提供熔断器、重试、隔离仓、限流器、超时控制等能力
-- **Spring 集成** — 可选；通过 `dependSpringBean()` 将 Spring Bean 作为 DAG 节点
+- **Spring Boot Starter** — `dag-flow-spring-boot-starter` 自动配置 dag-flow 引擎，`dependSpringBean()` 开箱即用
 - **智能线程池** — I/O 池（2x–8x 核心数）和 CPU 池（核心数+1），拒绝策略为 `CallerRunsPolicy`
 - **错误传播** — 节点异常以 `ExecutionException` 传播，下游节点自动取消
 
@@ -37,6 +37,7 @@
 | `dag-flow-core` | 核心框架：DAG 构建器、运行器、命令 API、线程池 |
 | `dag-flow-hystrix` | Netflix Hystrix 扩展 |
 | `dag-flow-resilience4j` | Resilience4j 扩展（熔断器、重试、隔离仓、限流器、超时控制） |
+| `dag-flow-spring-boot-starter` | Spring Boot 4 自动配置 Starter |
 
 ## 快速开始
 
@@ -48,6 +49,9 @@
 dependencies {
     // 核心模块（必选）
     implementation 'com.lesofn:dag-flow-core:1.0-SNAPSHOT'
+
+    // Spring Boot Starter（可选 — 在 Spring Boot 应用中自动配置 dag-flow）
+    implementation 'com.lesofn:dag-flow-spring-boot-starter:1.0-SNAPSHOT'
 
     // Hystrix 扩展（可选）
     implementation 'com.lesofn:dag-flow-hystrix:1.0-SNAPSHOT'
@@ -250,15 +254,42 @@ JobRunner<MyContext> runner = new Resilience4jJobBuilder<MyContext>()
 
 支持的装饰器：`CircuitBreaker`（熔断器）、`Retry`（重试）、`Bulkhead`（隔离仓）、`RateLimiter`（限流器）、`TimeLimiter`（超时控制）— 可自由组合。
 
-### Spring 集成
+### Spring Boot Starter
 
-将 Spring Bean 作为 DAG 节点（需要 classpath 中有 `spring-context`）：
+添加 `dag-flow-spring-boot-starter` 即可在 Spring Boot 应用中自动配置 dag-flow 引擎：
+
+```groovy
+// build.gradle
+implementation 'com.lesofn:dag-flow-spring-boot-starter:1.0-SNAPSHOT'
+```
+
+安装后，`SpringContextHolder` 自动注册，`dependSpringBean()` 开箱即用，无需手动配置：
 
 ```java
-new JobBuilder<MyContext>()
-        .addNode(MyService.class)
-        .dependSpringBean("anotherService")
+// 实现 DagFlowCommand 的 Spring Bean 可直接用作 DAG 节点
+@Component
+public class OrderService implements AsyncCommand<OrderContext, Order> {
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Override
+    public Order run(OrderContext context) {
+        return orderRepository.findById(context.getOrderId());
+    }
+}
+
+// 在 DAG 构建中通过名称引用 Spring Bean
+new JobBuilder<OrderContext>()
+        .addNode(CalcDiscount.class)
+        .dependSpringBean("orderService")   // 从 Spring ApplicationContext 中解析
         .run(context);
+```
+
+通过 `application.properties` / `application.yml` 配置：
+
+```properties
+# 禁用 dag-flow 自动配置（默认：true）
+dagflow.enabled=false
 ```
 
 ### 自定义线程池
@@ -304,21 +335,26 @@ dag-flow/
 │   └── src/main/java/com/lesofn/dagflow/hystrix/
 │       ├── HystrixCommandWrapper.java       # HystrixCommand → SyncCommand 适配器
 │       └── HystrixJobBuilder.java           # 提供 addHystrixNode() 的构建器
-└── dag-flow-resilience4j/                   # Resilience4j 扩展模块
-    └── src/main/java/com/lesofn/dagflow/resilience4j/
-        ├── Resilience4jCommand.java         # Resilience4j 装饰器包装
-        └── Resilience4jJobBuilder.java      # 提供 addResilience4jNode() 的构建器
+├── dag-flow-resilience4j/                   # Resilience4j 扩展模块
+│   └── src/main/java/com/lesofn/dagflow/resilience4j/
+│       ├── Resilience4jCommand.java         # Resilience4j 装饰器包装
+│       └── Resilience4jJobBuilder.java      # 提供 addResilience4jNode() 的构建器
+└── dag-flow-spring-boot-starter/            # Spring Boot 4 自动配置 Starter
+    └── src/main/java/com/lesofn/dagflow/spring/boot/autoconfigure/
+        ├── DagFlowAutoConfiguration.java    # 自动注册 SpringContextHolder
+        └── DagFlowProperties.java           # dagflow.enabled 配置
 ```
 
 ## 构建与测试
 
 ```bash
-./gradlew build                        # 构建所有模块
-./gradlew test                         # 运行所有测试（Spock + JUnit Platform）
-./gradlew :dag-flow-core:test         # 仅运行核心模块测试
-./gradlew :dag-flow-hystrix:test      # 仅运行 Hystrix 测试
-./gradlew :dag-flow-resilience4j:test # 仅运行 Resilience4j 测试
-./gradlew clean build                  # 清理后构建
+./gradlew build                                 # 构建所有模块
+./gradlew test                                  # 运行所有测试（Spock + JUnit Platform）
+./gradlew :dag-flow-core:test                  # 仅运行核心模块测试
+./gradlew :dag-flow-hystrix:test               # 仅运行 Hystrix 测试
+./gradlew :dag-flow-resilience4j:test          # 仅运行 Resilience4j 测试
+./gradlew :dag-flow-spring-boot-starter:test   # 仅运行 Spring Boot Starter 测试
+./gradlew clean build                           # 清理后构建
 ```
 
 ## 环境要求
