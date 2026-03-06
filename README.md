@@ -23,10 +23,20 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 - **Cycle detection** — DFS-based cycle detection before execution with clear error reporting
 - **Fluent builder API** — Chain `.addNode().depend()` calls; builder is reusable across runs
 - **Lambda support** — `funcNode()` accepts `Function<C, R>` or `Consumer<C>` for lightweight nodes
-- **Hystrix integration** — `addHystrixNode()` wraps Netflix `HystrixCommand` into the DAG
+- **Extensible architecture** — `JobBuilder` is designed for extension; create custom builders for third-party integrations
+- **Hystrix integration** — `dag-flow-hystrix` module wraps Netflix `HystrixCommand` into the DAG
+- **Resilience4j integration** — `dag-flow-resilience4j` module provides CircuitBreaker, Retry, Bulkhead, RateLimiter, TimeLimiter support
 - **Spring integration** — Optional; resolve Spring beans as DAG nodes via `dependSpringBean()`
 - **Smart thread pools** — I/O pool (2x–8x cores) and CPU pool (cores+1) with `CallerRunsPolicy`
 - **Error propagation** — Node exceptions propagate as `ExecutionException`; downstream nodes are cancelled
+
+## Module Structure
+
+| Module | Description |
+|---|---|
+| `dag-flow-core` | Core framework: DAG builder, runner, command API, thread pools |
+| `dag-flow-hystrix` | Netflix Hystrix extension |
+| `dag-flow-resilience4j` | Resilience4j extension (CircuitBreaker, Retry, Bulkhead, RateLimiter, TimeLimiter) |
 
 ## Quick Start
 
@@ -36,7 +46,14 @@ Add to your `build.gradle`:
 
 ```groovy
 dependencies {
-    implementation 'com.lesofn:dag-flow:1.0-SNAPSHOT'
+    // Core (required)
+    implementation 'com.lesofn:dag-flow-core:1.0-SNAPSHOT'
+
+    // Hystrix extension (optional)
+    implementation 'com.lesofn:dag-flow-hystrix:1.0-SNAPSHOT'
+
+    // Resilience4j extension (optional)
+    implementation 'com.lesofn:dag-flow-resilience4j:1.0-SNAPSHOT'
 }
 ```
 
@@ -106,18 +123,21 @@ FetchOrder   FetchUser      ← parallel (no mutual dependency)
 DagFlowCommand<C, R>                  // Base: R run(C context)
 ├── SyncCommand<C, R>                  // Runs on caller thread
 ├── AsyncCommand<C, R>                 // Runs on I/O thread pool
-│   ├── BatchCommand<C, P, R>          // Fan-out per param → Map<P, R>
-│   └── HystrixCommandWrapper          // Netflix Hystrix adapter
+│   └── BatchCommand<C, P, R>          // Fan-out per param → Map<P, R>
 └── CalcCommand<C, R>                  // Runs on CPU thread pool
         ├── FunctionCommand            // Lambda Function<C, R> wrapper
         └── ConsumerCommand            // Lambda Consumer<C> wrapper
+
+Extensions (SyncCommand-based):
+├── HystrixCommandWrapper              // dag-flow-hystrix: Netflix Hystrix adapter
+└── Resilience4jCommand                // dag-flow-resilience4j: Resilience4j decorator wrapper
 ```
 
 ### Core Components
 
 | Component | Description |
 |---|---|
-| `JobBuilder<C>` | Fluent API for DAG construction and node registration |
+| `JobBuilder<C>` | Fluent API for DAG construction and node registration (extensible) |
 | `JobRunner<C>` | `CompletableFuture`-based execution engine with result retrieval |
 | `DagFlowContext` | Abstract context — subclass to carry request data and access upstream results |
 | `DagNode` | Runtime node wrapping a command with its future and dependencies |
@@ -193,15 +213,42 @@ new JobBuilder<OrderContext>()
 
 ### Hystrix Integration
 
-Wrap existing `HystrixCommand` implementations:
+Use `dag-flow-hystrix` module to wrap existing `HystrixCommand` implementations:
 
 ```java
-JobRunner<MyContext> runner = new JobBuilder<MyContext>()
+// Add dependency: implementation 'com.lesofn:dag-flow-hystrix:1.0-SNAPSHOT'
+
+JobRunner<MyContext> runner = new HystrixJobBuilder<MyContext>()
         .addHystrixNode(MyHystrixCommand.class)
         .run(context);
 
-String result = runner.getHystrixResult(MyHystrixCommand.class);
+String result = runner.getResult("myHystrixCommand");
+// Or use the type-safe helper:
+String result = HystrixJobBuilder.getHystrixResult(runner, MyHystrixCommand.class);
 ```
+
+### Resilience4j Integration
+
+Use `dag-flow-resilience4j` module to add fault tolerance to DAG nodes:
+
+```java
+// Add dependency: implementation 'com.lesofn:dag-flow-resilience4j:1.0-SNAPSHOT'
+
+CircuitBreaker cb = CircuitBreaker.of("myService", CircuitBreakerConfig.ofDefaults());
+Retry retry = Retry.of("myService", RetryConfig.custom().maxAttempts(3).build());
+
+Resilience4jCommand<MyContext, String> command =
+        new Resilience4jCommand<>(ctx -> callRemoteService(ctx))
+                .withCircuitBreaker(cb)
+                .withRetry(retry);
+
+JobRunner<MyContext> runner = new Resilience4jJobBuilder<MyContext>()
+        .addResilience4jNode("protectedCall", command)
+        .addNode(DownstreamJob.class).depend("protectedCall")
+        .run(context);
+```
+
+Supported decorators: `CircuitBreaker`, `Retry`, `Bulkhead`, `RateLimiter`, `TimeLimiter` — can be combined freely.
 
 ### Spring Integration
 
@@ -235,31 +282,43 @@ builder.funcNode("custom", myFunction, myExecutor);
 ## Project Structure
 
 ```
-src/main/java/com/lesofn/dagflow/
-├── JobBuilder.java              # Fluent DAG construction
-├── JobRunner.java               # CompletableFuture execution engine
-├── api/
-│   ├── DagFlowCommand.java      # Base command interface
-│   ├── SyncCommand.java         # Synchronous command
-│   ├── AsyncCommand.java        # Async (I/O) command
-│   ├── CalcCommand.java         # CPU-bound command
-│   ├── BatchCommand.java        # Batch fan-out command
-│   ├── context/                 # Context & injection interfaces
-│   ├── depend/                  # Dependency declaration interface
-│   ├── function/                # Lambda wrappers
-│   └── hystrix/                 # Hystrix adapter
-├── exception/                   # DagFlowBuildException, CycleException, etc.
-├── executor/                    # Default thread pool configuration
-├── model/                       # DagNode, DagNodeCheck, DagNodeFactory
-└── spring/                      # Optional Spring integration
+dag-flow/
+├── dag-flow-core/                           # Core module
+│   └── src/main/java/com/lesofn/dagflow/
+│       ├── JobBuilder.java                  # Fluent DAG construction (extensible)
+│       ├── JobRunner.java                   # CompletableFuture execution engine
+│       ├── api/
+│       │   ├── DagFlowCommand.java          # Base command interface
+│       │   ├── SyncCommand.java             # Synchronous command
+│       │   ├── AsyncCommand.java            # Async (I/O) command
+│       │   ├── CalcCommand.java             # CPU-bound command
+│       │   ├── BatchCommand.java            # Batch fan-out command
+│       │   ├── context/                     # Context & injection interfaces
+│       │   ├── depend/                      # Dependency declaration interface
+│       │   └── function/                    # Lambda wrappers
+│       ├── exception/                       # DagFlowBuildException, CycleException, etc.
+│       ├── executor/                        # Default thread pool configuration
+│       ├── model/                           # DagNode, DagNodeCheck, DagNodeFactory
+│       └── spring/                          # Optional Spring integration
+├── dag-flow-hystrix/                        # Hystrix extension module
+│   └── src/main/java/com/lesofn/dagflow/hystrix/
+│       ├── HystrixCommandWrapper.java       # HystrixCommand → SyncCommand adapter
+│       └── HystrixJobBuilder.java           # Builder with addHystrixNode()
+└── dag-flow-resilience4j/                   # Resilience4j extension module
+    └── src/main/java/com/lesofn/dagflow/resilience4j/
+        ├── Resilience4jCommand.java         # Resilience4j decorator wrapper
+        └── Resilience4jJobBuilder.java      # Builder with addResilience4jNode()
 ```
 
 ## Build & Test
 
 ```bash
-./gradlew build          # Build the project
-./gradlew test           # Run all tests (Spock + JUnit Platform)
-./gradlew clean build    # Clean build
+./gradlew build                        # Build all modules
+./gradlew test                         # Run all tests (Spock + JUnit Platform)
+./gradlew :dag-flow-core:test         # Run core tests only
+./gradlew :dag-flow-hystrix:test      # Run Hystrix tests only
+./gradlew :dag-flow-resilience4j:test # Run Resilience4j tests only
+./gradlew clean build                  # Clean build
 ```
 
 ## Requirements

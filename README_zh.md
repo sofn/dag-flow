@@ -23,10 +23,20 @@
 - **环路检测** — 执行前基于 DFS 的环路检测，清晰的错误报告
 - **流式构建 API** — 链式调用 `.addNode().depend()`；Builder 可跨多次运行复用
 - **Lambda 支持** — `funcNode()` 接受 `Function<C, R>` 或 `Consumer<C>`，轻量级节点无需建类
-- **Hystrix 集成** — `addHystrixNode()` 将 Netflix `HystrixCommand` 包装为 DAG 节点
+- **可扩展架构** — `JobBuilder` 支持继承扩展，方便接入第三方容错框架
+- **Hystrix 集成** — `dag-flow-hystrix` 模块将 Netflix `HystrixCommand` 包装为 DAG 节点
+- **Resilience4j 集成** — `dag-flow-resilience4j` 模块提供熔断器、重试、隔离仓、限流器、超时控制等能力
 - **Spring 集成** — 可选；通过 `dependSpringBean()` 将 Spring Bean 作为 DAG 节点
 - **智能线程池** — I/O 池（2x–8x 核心数）和 CPU 池（核心数+1），拒绝策略为 `CallerRunsPolicy`
 - **错误传播** — 节点异常以 `ExecutionException` 传播，下游节点自动取消
+
+## 模块结构
+
+| 模块 | 说明 |
+|---|---|
+| `dag-flow-core` | 核心框架：DAG 构建器、运行器、命令 API、线程池 |
+| `dag-flow-hystrix` | Netflix Hystrix 扩展 |
+| `dag-flow-resilience4j` | Resilience4j 扩展（熔断器、重试、隔离仓、限流器、超时控制） |
 
 ## 快速开始
 
@@ -36,7 +46,14 @@
 
 ```groovy
 dependencies {
-    implementation 'com.lesofn:dag-flow:1.0-SNAPSHOT'
+    // 核心模块（必选）
+    implementation 'com.lesofn:dag-flow-core:1.0-SNAPSHOT'
+
+    // Hystrix 扩展（可选）
+    implementation 'com.lesofn:dag-flow-hystrix:1.0-SNAPSHOT'
+
+    // Resilience4j 扩展（可选）
+    implementation 'com.lesofn:dag-flow-resilience4j:1.0-SNAPSHOT'
 }
 ```
 
@@ -106,18 +123,21 @@ FetchOrder   FetchUser      ← 并行执行（无相互依赖）
 DagFlowCommand<C, R>                  // 基础接口: R run(C context)
 ├── SyncCommand<C, R>                  // 在调用线程执行
 ├── AsyncCommand<C, R>                 // 在 I/O 线程池执行
-│   ├── BatchCommand<C, P, R>          // 按参数扇出 → Map<P, R>
-│   └── HystrixCommandWrapper          // Netflix Hystrix 适配器
+│   └── BatchCommand<C, P, R>          // 按参数扇出 → Map<P, R>
 └── CalcCommand<C, R>                  // 在 CPU 线程池执行
         ├── FunctionCommand            // Lambda Function<C, R> 包装
         └── ConsumerCommand            // Lambda Consumer<C> 包装
+
+扩展模块（基于 SyncCommand）：
+├── HystrixCommandWrapper              // dag-flow-hystrix: Netflix Hystrix 适配器
+└── Resilience4jCommand                // dag-flow-resilience4j: Resilience4j 装饰器包装
 ```
 
 ### 核心组件
 
 | 组件 | 说明 |
 |---|---|
-| `JobBuilder<C>` | 流式 API，用于 DAG 构建和节点注册 |
+| `JobBuilder<C>` | 流式 API，用于 DAG 构建和节点注册（支持继承扩展） |
 | `JobRunner<C>` | 基于 `CompletableFuture` 的执行引擎，支持结果获取 |
 | `DagFlowContext` | 抽象 Context — 子类化以承载请求数据和访问上游结果 |
 | `DagNode` | 运行时节点，包装命令及其 Future 和依赖关系 |
@@ -193,15 +213,42 @@ new JobBuilder<OrderContext>()
 
 ### Hystrix 集成
 
-包装现有的 `HystrixCommand` 实现：
+使用 `dag-flow-hystrix` 模块包装现有的 `HystrixCommand` 实现：
 
 ```java
-JobRunner<MyContext> runner = new JobBuilder<MyContext>()
+// 添加依赖: implementation 'com.lesofn:dag-flow-hystrix:1.0-SNAPSHOT'
+
+JobRunner<MyContext> runner = new HystrixJobBuilder<MyContext>()
         .addHystrixNode(MyHystrixCommand.class)
         .run(context);
 
-String result = runner.getHystrixResult(MyHystrixCommand.class);
+String result = runner.getResult("myHystrixCommand");
+// 或使用类型安全的辅助方法：
+String result = HystrixJobBuilder.getHystrixResult(runner, MyHystrixCommand.class);
 ```
+
+### Resilience4j 集成
+
+使用 `dag-flow-resilience4j` 模块为 DAG 节点添加容错能力：
+
+```java
+// 添加依赖: implementation 'com.lesofn:dag-flow-resilience4j:1.0-SNAPSHOT'
+
+CircuitBreaker cb = CircuitBreaker.of("myService", CircuitBreakerConfig.ofDefaults());
+Retry retry = Retry.of("myService", RetryConfig.custom().maxAttempts(3).build());
+
+Resilience4jCommand<MyContext, String> command =
+        new Resilience4jCommand<>(ctx -> callRemoteService(ctx))
+                .withCircuitBreaker(cb)
+                .withRetry(retry);
+
+JobRunner<MyContext> runner = new Resilience4jJobBuilder<MyContext>()
+        .addResilience4jNode("protectedCall", command)
+        .addNode(DownstreamJob.class).depend("protectedCall")
+        .run(context);
+```
+
+支持的装饰器：`CircuitBreaker`（熔断器）、`Retry`（重试）、`Bulkhead`（隔离仓）、`RateLimiter`（限流器）、`TimeLimiter`（超时控制）— 可自由组合。
 
 ### Spring 集成
 
@@ -235,31 +282,43 @@ builder.funcNode("custom", myFunction, myExecutor);
 ## 项目结构
 
 ```
-src/main/java/com/lesofn/dagflow/
-├── JobBuilder.java              # 流式 DAG 构建
-├── JobRunner.java               # CompletableFuture 执行引擎
-├── api/
-│   ├── DagFlowCommand.java      # 基础命令接口
-│   ├── SyncCommand.java         # 同步命令
-│   ├── AsyncCommand.java        # 异步 (I/O) 命令
-│   ├── CalcCommand.java         # CPU 密集型命令
-│   ├── BatchCommand.java        # 批量扇出命令
-│   ├── context/                 # Context 和注入接口
-│   ├── depend/                  # 依赖声明接口
-│   ├── function/                # Lambda 包装器
-│   └── hystrix/                 # Hystrix 适配器
-├── exception/                   # DagFlowBuildException, CycleException 等
-├── executor/                    # 默认线程池配置
-├── model/                       # DagNode, DagNodeCheck, DagNodeFactory
-└── spring/                      # 可选的 Spring 集成
+dag-flow/
+├── dag-flow-core/                           # 核心模块
+│   └── src/main/java/com/lesofn/dagflow/
+│       ├── JobBuilder.java                  # 流式 DAG 构建（支持扩展）
+│       ├── JobRunner.java                   # CompletableFuture 执行引擎
+│       ├── api/
+│       │   ├── DagFlowCommand.java          # 基础命令接口
+│       │   ├── SyncCommand.java             # 同步命令
+│       │   ├── AsyncCommand.java            # 异步 (I/O) 命令
+│       │   ├── CalcCommand.java             # CPU 密集型命令
+│       │   ├── BatchCommand.java            # 批量扇出命令
+│       │   ├── context/                     # Context 和注入接口
+│       │   ├── depend/                      # 依赖声明接口
+│       │   └── function/                    # Lambda 包装器
+│       ├── exception/                       # DagFlowBuildException, CycleException 等
+│       ├── executor/                        # 默认线程池配置
+│       ├── model/                           # DagNode, DagNodeCheck, DagNodeFactory
+│       └── spring/                          # 可选的 Spring 集成
+├── dag-flow-hystrix/                        # Hystrix 扩展模块
+│   └── src/main/java/com/lesofn/dagflow/hystrix/
+│       ├── HystrixCommandWrapper.java       # HystrixCommand → SyncCommand 适配器
+│       └── HystrixJobBuilder.java           # 提供 addHystrixNode() 的构建器
+└── dag-flow-resilience4j/                   # Resilience4j 扩展模块
+    └── src/main/java/com/lesofn/dagflow/resilience4j/
+        ├── Resilience4jCommand.java         # Resilience4j 装饰器包装
+        └── Resilience4jJobBuilder.java      # 提供 addResilience4jNode() 的构建器
 ```
 
 ## 构建与测试
 
 ```bash
-./gradlew build          # 构建项目
-./gradlew test           # 运行所有测试（Spock + JUnit Platform）
-./gradlew clean build    # 清理后构建
+./gradlew build                        # 构建所有模块
+./gradlew test                         # 运行所有测试（Spock + JUnit Platform）
+./gradlew :dag-flow-core:test         # 仅运行核心模块测试
+./gradlew :dag-flow-hystrix:test      # 仅运行 Hystrix 测试
+./gradlew :dag-flow-resilience4j:test # 仅运行 Resilience4j 测试
+./gradlew clean build                  # 清理后构建
 ```
 
 ## 环境要求
