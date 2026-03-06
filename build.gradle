@@ -1,40 +1,23 @@
 apply plugin: 'idea'
-apply plugin: 'java'
-apply plugin: 'groovy'
 
 group 'com.lesofn'
 version '1.0-SNAPSHOT'
 
-repositories {
-    maven { url 'https://maven.aliyun.com/repository/public/' }
-    mavenLocal()
-    mavenCentral()
-}
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'groovy'
 
-dependencies {
-    implementation "org.apache.commons:commons-lang3:3.12.0"
-    implementation "org.apache.commons:commons-collections4:4.4"
-    implementation "com.google.guava:guava:33.3.1-jre"
-    implementation "org.jooq:jool:0.9.14"
-    implementation "com.netflix.hystrix:hystrix-core:1.5.18"
+    group 'com.lesofn'
+    version '1.0-SNAPSHOT'
 
-    compileOnly 'org.springframework:spring-context:6.1.14'
-    compileOnly "org.projectlombok:lombok:1.18.34"
-    annotationProcessor "org.projectlombok:lombok:1.18.34"
-    //test
-    testCompileOnly "org.projectlombok:lombok:1.18.34"
-    testAnnotationProcessor "org.projectlombok:lombok:1.18.34"
-    testImplementation "org.apache.logging.log4j:log4j-core:2.24.1"
-    testImplementation 'org.apache.logging.log4j:log4j-slf4j2-impl:2.24.1'
-    //spock
-    testImplementation "org.apache.groovy:groovy-all:4.0.24"
-    testImplementation platform("org.spockframework:spock-bom:2.3-groovy-4.0")
-    testImplementation "org.spockframework:spock-core"
-}
-
-allprojects {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/public/' }
+        mavenLocal()
+        mavenCentral()
+    }
 
     tasks.withType(JavaCompile) {
         options.encoding = "UTF-8"
@@ -42,5 +25,19 @@ allprojects {
 
     test {
         useJUnitPlatform()
+    }
+
+    dependencies {
+        compileOnly "org.projectlombok:lombok:1.18.34"
+        annotationProcessor "org.projectlombok:lombok:1.18.34"
+        //test
+        testCompileOnly "org.projectlombok:lombok:1.18.34"
+        testAnnotationProcessor "org.projectlombok:lombok:1.18.34"
+        testImplementation "org.apache.logging.log4j:log4j-core:2.24.1"
+        testImplementation 'org.apache.logging.log4j:log4j-slf4j2-impl:2.24.1'
+        //spock
+        testImplementation "org.apache.groovy:groovy-all:4.0.24"
+        testImplementation platform("org.spockframework:spock-bom:2.3-groovy-4.0")
+        testImplementation "org.spockframework:spock-core"
     }
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration status="info">
+    <appenders>
+        <Console name="Console" target="SYSTEM_OUT" follow="true">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5level%t %l %msg%n" />
+        </Console>
+    </appenders>
+    <loggers>
+        <logger name="org.apache.logging" level="off"/>
+        <logger name="com.lesofn" level="debug"/>
+
+        <root level="info">
+            <appender-ref ref="Console"/>
+        </root>
+    </loggers>
+</configuration>

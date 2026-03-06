@@ -88,7 +88,7 @@ buildNumber.properties
 !/.mvn/wrapper/maven-wrapper.jar
 ### Gradle template
 .gradle
-/build/
+**/build/
 
 # Ignore Gradle GUI config
 gradle-app.setting
