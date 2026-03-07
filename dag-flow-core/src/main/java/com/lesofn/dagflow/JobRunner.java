@@ -7,6 +7,10 @@ import com.lesofn.dagflow.exception.DagFlowRunException;
 import com.lesofn.dagflow.model.DagNode;
 import com.lesofn.dagflow.model.DagNodeCheck;
 import com.lesofn.dagflow.model.DagNodeFactory;
+import com.lesofn.dagflow.tracing.DagFlowTracing;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 
@@ -32,26 +36,39 @@ public class JobRunner<C extends DagFlowContext> {
 
         context.setRunner(this);
 
-        //配置所有节点依赖关系
-        for (DagNode<C, ?> node : nodeFactory.getNodes()) {
-            //注册到context
-            futureMap.put(node.getName(), node.getFuture());
-
-            if (CollectionUtils.isEmpty(node.getDepends())) {
-                log.info("start node direct: " + node.getName());
-                node.startNode(context);
-            } else {
-                CompletableFuture<?>[] depFutures = node.getDepends().stream()
-                        .map(it -> it.startNode(context))
-                        .toArray(CompletableFuture[]::new);
-
-                CompletableFuture.allOf(depFutures).exceptionally(e -> {
-                    node.cancel();
-                    return null;
-                }).thenRun(() -> node.startNode(context));
+        Span dagSpan = DagFlowTracing.startDagSpan(nodeFactory.getNodes().size());
+        Context dagContext = Context.current().with(dagSpan);
+        try (Scope ignored = dagSpan.makeCurrent()) {
+            //设置 OTel 父上下文到每个节点
+            for (DagNode<C, ?> node : nodeFactory.getNodes()) {
+                node.setParentTraceContext(dagContext);
             }
+
+            //配置所有节点依赖关系
+            for (DagNode<C, ?> node : nodeFactory.getNodes()) {
+                //注册到context
+                futureMap.put(node.getName(), node.getFuture());
+
+                if (CollectionUtils.isEmpty(node.getDepends())) {
+                    log.info("start node direct: " + node.getName());
+                    node.startNode(context);
+                } else {
+                    CompletableFuture<?>[] depFutures = node.getDepends().stream()
+                            .map(it -> it.startNode(context))
+                            .toArray(CompletableFuture[]::new);
+
+                    CompletableFuture.allOf(depFutures).exceptionally(e -> {
+                        node.cancel();
+                        return null;
+                    }).thenRun(() -> node.startNode(context));
+                }
+            }
+            CompletableFuture.allOf(this.futureMap.values().toArray(new CompletableFuture[]{})).get();
+            DagFlowTracing.endSpanOk(dagSpan);
+        } catch (Exception e) {
+            DagFlowTracing.endSpanError(dagSpan, e);
+            throw e;
         }
-        CompletableFuture.allOf(this.futureMap.values().toArray(new CompletableFuture[]{})).get();
         return this;
     }
 

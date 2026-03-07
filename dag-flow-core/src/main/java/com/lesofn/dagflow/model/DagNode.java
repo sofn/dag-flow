@@ -7,6 +7,10 @@ import com.lesofn.dagflow.api.DagFlowCommand;
 import com.lesofn.dagflow.api.SyncCommand;
 import com.lesofn.dagflow.api.context.DagFlowContext;
 import com.lesofn.dagflow.executor.DagFlowDefaultExecutor;
+import com.lesofn.dagflow.tracing.DagFlowTracing;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
@@ -57,6 +61,11 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
      * 执行器覆盖（如虚拟线程），优先级高于命令默认执行器
      */
     private Executor executorOverride;
+
+    /**
+     * OTel 父上下文，由 JobRunner 在 run 时设置
+     */
+    private Context parentTraceContext;
 
     private volatile boolean started;
 
@@ -112,16 +121,39 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
         }
         this.started = true;
 
+        Context parentCtx = parentTraceContext != null ? parentTraceContext : Context.current();
+        Span nodeSpan = DagFlowTracing.startNodeSpan(parentCtx, name, getCommandType());
+        Context nodeContext = parentCtx.with(nodeSpan);
+
         Executor executor = getExecutor();
 
         if (this.instance instanceof BatchCommand) {
-            this.executeRoute(context, getFuture());
+            try (Scope ignored = nodeSpan.makeCurrent()) {
+                this.batchExecute(context, nodeContext, nodeSpan);
+            }
         } else if (executor != null) {
-            executor.execute(() -> this.executeRoute(context, getFuture()));
+            executor.execute(nodeContext.wrap(() -> {
+                try (Scope ignored = nodeSpan.makeCurrent()) {
+                    this.execute(getFuture(), CheckedSupplier.unchecked(() -> this.instance.run(context)), nodeSpan);
+                }
+            }));
         } else {
-            this.executeRoute(context, getFuture());
+            try (Scope ignored = nodeSpan.makeCurrent()) {
+                this.execute(getFuture(), CheckedSupplier.unchecked(() -> this.instance.run(context)), nodeSpan);
+            }
         }
         return getFuture();
+    }
+
+    /**
+     * 获取命令类型名称，用于 tracing attribute
+     */
+    String getCommandType() {
+        if (instance instanceof SyncCommand) return "SyncCommand";
+        if (instance instanceof BatchCommand) return "BatchCommand";
+        if (instance instanceof AsyncCommand) return "AsyncCommand";
+        if (instance instanceof CalcCommand) return "CalcCommand";
+        return "Unknown";
     }
 
     private Executor getExecutor() {
@@ -147,42 +179,49 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
         return executor;
     }
 
-    private void executeRoute(C context, CompletableFuture<Object> future) {
-        if (this.instance instanceof BatchCommand) {
-            this.batchExecute(context);
-            return;
-        }
-        this.execute(future, CheckedSupplier.unchecked(() -> this.instance.run(context)));
-    }
-
-    private <R> void execute(CompletableFuture<R> future, Supplier<R> supplier) {
+    private <R> void execute(CompletableFuture<R> future, Supplier<R> supplier, Span span) {
         try {
             future.complete(supplier.get());
+            DagFlowTracing.endSpanOk(span);
         } catch (Exception e) {
             log.error("DagFlow run error", e);
             future.completeExceptionally(e);
+            DagFlowTracing.endSpanError(span, e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    public <B extends BatchCommand<C, P, R>, P, R> void batchExecute(C context) {
+    <B extends BatchCommand<C, P, R>, P, R> void batchExecute(C context, Context nodeContext, Span nodeSpan) {
         B batchNode = (B) this.instance;
         Executor executor = getExecutor();
 
         Set<P> batchParam = batchNode.batchParam(context);
+        nodeSpan.setAttribute(DagFlowTracing.ATTR_BATCH_SIZE, (long) batchParam.size());
+
         List<Pair<P, CompletableFuture<R>>> childFutures = new ArrayList<>();
         for (P p : batchParam) {
             CompletableFuture<R> itemFuture = new CompletableFuture<>();
             childFutures.add(Pair.of(p, itemFuture));
+
+            Span itemSpan = DagFlowTracing.startBatchItemSpan(nodeContext, name, p);
+            Context itemContext = nodeContext.with(itemSpan);
+
             if (executor != null) {
-                executor.execute(() -> this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p))));
+                executor.execute(itemContext.wrap(() -> {
+                    try (Scope ignored = itemSpan.makeCurrent()) {
+                        this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p)), itemSpan);
+                    }
+                }));
             } else {
-                this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p)));
+                try (Scope ignored = itemSpan.makeCurrent()) {
+                    this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p)), itemSpan);
+                }
             }
         }
 
         CompletableFuture.allOf(childFutures.stream().map(Pair::getRight).toArray(CompletableFuture[]::new)).exceptionally(e -> {
             getFuture().completeExceptionally(e);
+            DagFlowTracing.endSpanError(nodeSpan, e);
             return null;
         }).thenRun(() -> {
             if (childFutures.stream().map(Pair::getRight).noneMatch(CompletableFuture::isCompletedExceptionally)) {
@@ -196,6 +235,7 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
                     }
                 }
                 getFuture().complete(map);
+                DagFlowTracing.endSpanOk(nodeSpan);
             }
         });
     }

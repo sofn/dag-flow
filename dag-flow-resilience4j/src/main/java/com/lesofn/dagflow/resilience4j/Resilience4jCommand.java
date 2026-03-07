@@ -7,7 +7,11 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.timelimiter.TimeLimiter;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.Span;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.Function;
@@ -20,6 +24,8 @@ import java.util.function.Supplier;
  * @author sofn
  */
 public class Resilience4jCommand<C extends DagFlowContext, R> implements SyncCommand<C, R> {
+
+    public static final AttributeKey<String> ATTR_DECORATORS = AttributeKey.stringKey("dagflow.resilience4j.decorators");
 
     private final Function<C, R> function;
     private CircuitBreaker circuitBreaker;
@@ -61,6 +67,14 @@ public class Resilience4jCommand<C extends DagFlowContext, R> implements SyncCom
 
     @Override
     public R run(C context) throws Exception {
+        List<String> decoratorNames = new ArrayList<>();
+        if (bulkhead != null) decoratorNames.add("Bulkhead");
+        if (rateLimiter != null) decoratorNames.add("RateLimiter");
+        if (circuitBreaker != null) decoratorNames.add("CircuitBreaker");
+        if (retry != null) decoratorNames.add("Retry");
+        if (timeLimiter != null) decoratorNames.add("TimeLimiter");
+        Span.current().setAttribute(ATTR_DECORATORS, String.join(",", decoratorNames));
+
         Supplier<R> supplier = () -> function.apply(context);
 
         // 按推荐顺序应用装饰器

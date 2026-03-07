@@ -4,6 +4,8 @@ import com.lesofn.dagflow.api.SyncCommand;
 import com.lesofn.dagflow.api.context.DagFlowContext;
 import com.lesofn.dagflow.api.context.DagFlowContextInjection;
 import com.netflix.hystrix.HystrixCommand;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.Span;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -25,9 +27,16 @@ public class HystrixCommandWrapper<C extends DagFlowContext, R> implements SyncC
         this.hystrixCommand = hystrixCommand;
     }
 
+    public static final AttributeKey<String> ATTR_COMMAND_KEY = AttributeKey.stringKey("dagflow.hystrix.command_key");
+    public static final AttributeKey<String> ATTR_GROUP_KEY = AttributeKey.stringKey("dagflow.hystrix.group_key");
+
     @Override
     @SuppressWarnings("unchecked")
     public R run(C context) throws Exception {
+        Span span = Span.current();
+        span.setAttribute(ATTR_COMMAND_KEY, hystrixCommand.getCommandKey().name());
+        span.setAttribute(ATTR_GROUP_KEY, hystrixCommand.getCommandGroup().name());
+
         if (hystrixCommand instanceof DagFlowContextInjection) {
             ((DagFlowContextInjection<C>) hystrixCommand).setContext(context);
         }

@@ -43,11 +43,16 @@ subprojects {
     dependencies {
         compileOnly "org.projectlombok:lombok:1.18.34"
         annotationProcessor "org.projectlombok:lombok:1.18.34"
+        //opentelemetry
+        implementation platform("io.opentelemetry:opentelemetry-bom:1.40.0")
+        implementation "io.opentelemetry:opentelemetry-api"
+        implementation "io.opentelemetry:opentelemetry-context"
         //test
         testCompileOnly "org.projectlombok:lombok:1.18.34"
         testAnnotationProcessor "org.projectlombok:lombok:1.18.34"
         testImplementation "org.apache.logging.log4j:log4j-core:2.24.1"
         testImplementation 'org.apache.logging.log4j:log4j-slf4j2-impl:2.24.1'
+        testImplementation "io.opentelemetry:opentelemetry-sdk-testing"
         //spock
         testImplementation "org.apache.groovy:groovy-all:4.0.24"
         testImplementation platform("org.spockframework:spock-bom:2.3-groovy-4.0")
