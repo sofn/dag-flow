@@ -31,6 +31,20 @@ public interface BatchCommand<C extends DagFlowContext, P, R> extends AsyncComma
      */
     R run(C context, P param) throws Exception;
 
+    /**
+     * 批量执行策略，子类可覆盖。
+     * <ul>
+     *   <li>{@link BatchStrategy#ALL} — 全部执行完成（默认）</li>
+     *   <li>{@link BatchStrategy#ANY} — 至少 1 个执行完成后自动取消剩余任务</li>
+     *   <li>{@link BatchStrategy#atLeast(int)} — 至少 N 个执行完成后自动取消剩余任务</li>
+     * </ul>
+     *
+     * @return 执行策略
+     */
+    default BatchStrategy batchStrategy() {
+        return BatchStrategy.ALL;
+    }
+
     @Override
     default Map<P, R> run(C context) throws Exception {
         throw new DagFlowRunException("批量任务禁止执行此方法");

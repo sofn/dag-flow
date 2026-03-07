@@ -2,6 +2,7 @@ package com.lesofn.dagflow.model;
 
 import com.lesofn.dagflow.api.AsyncCommand;
 import com.lesofn.dagflow.api.BatchCommand;
+import com.lesofn.dagflow.api.BatchStrategy;
 import com.lesofn.dagflow.api.CalcCommand;
 import com.lesofn.dagflow.api.DagFlowCommand;
 import com.lesofn.dagflow.api.SyncCommand;
@@ -21,6 +22,7 @@ import org.jooq.lambda.fi.util.function.CheckedSupplier;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 /**
@@ -194,11 +196,24 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
     <B extends BatchCommand<C, P, R>, P, R> void batchExecute(C context, Context nodeContext, Span nodeSpan) {
         B batchNode = (B) this.instance;
         Executor executor = getExecutor();
+        BatchStrategy strategy = batchNode.batchStrategy();
 
         Set<P> batchParam = batchNode.batchParam(context);
         nodeSpan.setAttribute(DagFlowTracing.ATTR_BATCH_SIZE, (long) batchParam.size());
 
+        // 校验策略：requiredCount 不能超过总参数数
+        if (!strategy.isAll() && strategy.getRequiredCount() > batchParam.size()) {
+            IllegalArgumentException ex = new IllegalArgumentException(
+                    "BatchStrategy requiredCount(" + strategy.getRequiredCount() + ") > batchParam size(" + batchParam.size() + ")");
+            getFuture().completeExceptionally(ex);
+            DagFlowTracing.endSpanError(nodeSpan, ex);
+            return;
+        }
+
         List<Pair<P, CompletableFuture<R>>> childFutures = new ArrayList<>();
+        // 用于 ANY / AT_LEAST_N 策略计数
+        AtomicInteger completedCount = new AtomicInteger(0);
+
         for (P p : batchParam) {
             CompletableFuture<R> itemFuture = new CompletableFuture<>();
             childFutures.add(Pair.of(p, itemFuture));
@@ -217,27 +232,86 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
                     this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p)), itemSpan);
                 }
             }
+
+            // 注册完成回调：用于 ANY / AT_LEAST_N 提前完成
+            if (!strategy.isAll()) {
+                itemFuture.whenComplete((result, error) -> {
+                    if (error == null) {
+                        int done = completedCount.incrementAndGet();
+                        if (done >= strategy.getRequiredCount()) {
+                            finishBatch(childFutures, nodeSpan);
+                        }
+                    }
+                });
+            }
         }
 
-        CompletableFuture.allOf(childFutures.stream().map(Pair::getRight).toArray(CompletableFuture[]::new)).exceptionally(e -> {
-            getFuture().completeExceptionally(e);
-            DagFlowTracing.endSpanError(nodeSpan, e);
-            return null;
-        }).thenRun(() -> {
-            if (childFutures.stream().map(Pair::getRight).noneMatch(CompletableFuture::isCompletedExceptionally)) {
-                Map<P, R> map = new HashMap<>();
-                for (Pair<P, CompletableFuture<R>> pair : childFutures) {
-                    try {
-                        map.put(pair.getLeft(), pair.getRight().get());
-                    } catch (Exception e) {
-                        log.error("get future value error", e);
-                        Thread.currentThread().interrupt();
-                    }
+        if (strategy.isAll()) {
+            // ALL 策略：等全部完成
+            CompletableFuture.allOf(childFutures.stream().map(Pair::getRight).toArray(CompletableFuture[]::new)).exceptionally(e -> {
+                getFuture().completeExceptionally(e);
+                DagFlowTracing.endSpanError(nodeSpan, e);
+                return null;
+            }).thenRun(() -> {
+                if (childFutures.stream().map(Pair::getRight).noneMatch(CompletableFuture::isCompletedExceptionally)) {
+                    finishBatch(childFutures, nodeSpan);
                 }
-                getFuture().complete(map);
-                DagFlowTracing.endSpanOk(nodeSpan);
+            });
+        } else {
+            // ANY / AT_LEAST_N 策略：任一子任务异常也需要处理
+            for (Pair<P, CompletableFuture<R>> pair : childFutures) {
+                pair.getRight().whenComplete((result, error) -> {
+                    if (error != null && !getFuture().isDone()) {
+                        // 全部子任务完成/失败后仍未达标，则传播异常
+                        boolean allDone = childFutures.stream().map(Pair::getRight)
+                                .allMatch(f -> f.isDone() || f.isCancelled());
+                        if (allDone && completedCount.get() < strategy.getRequiredCount()) {
+                            getFuture().completeExceptionally(error);
+                            cancelRemaining(childFutures);
+                            DagFlowTracing.endSpanError(nodeSpan, error);
+                        }
+                    }
+                });
             }
-        });
+        }
+    }
+
+    /**
+     * 收集已完成的子任务结果，取消未完成的，完成节点 Future
+     */
+    @SuppressWarnings("unchecked")
+    private <P, R> void finishBatch(List<Pair<P, CompletableFuture<R>>> childFutures, Span nodeSpan) {
+        if (getFuture().isDone()) {
+            return;
+        }
+        Map<P, R> map = new HashMap<>();
+        for (Pair<P, CompletableFuture<R>> pair : childFutures) {
+            CompletableFuture<R> f = pair.getRight();
+            if (f.isDone() && !f.isCompletedExceptionally() && !f.isCancelled()) {
+                try {
+                    map.put(pair.getLeft(), f.get());
+                } catch (Exception e) {
+                    log.error("get future value error", e);
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        if (getFuture().complete(map)) {
+            cancelRemaining(childFutures);
+            DagFlowTracing.endSpanOk(nodeSpan);
+        }
+    }
+
+    /**
+     * 取消所有未完成的子任务
+     */
+    private <P, R> void cancelRemaining(List<Pair<P, CompletableFuture<R>>> childFutures) {
+        for (Pair<P, CompletableFuture<R>> pair : childFutures) {
+            CompletableFuture<R> f = pair.getRight();
+            if (!f.isDone()) {
+                f.cancel(true);
+            }
+        }
     }
 
     public void cancel() {
