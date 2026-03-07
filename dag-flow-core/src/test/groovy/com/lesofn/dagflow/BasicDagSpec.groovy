@@ -3,6 +3,7 @@ package com.lesofn.dagflow
 import com.lesofn.dagflow.test1.*
 import spock.lang.Specification
 
+import java.util.function.Consumer
 import java.util.function.Function
 
 /**
@@ -69,7 +70,7 @@ class BasicDagSpec extends Specification {
         def request = new Test1Context()
         request.setName("hello")
         def builder = new JobBuilder<Test1Context>()
-        builder.funcNode("consumer", { c -> } as java.util.function.Consumer).depend(Job1.class)
+        builder.funcNode("consumer", { c -> } as Consumer).depend(Job1.class)
 
         when:
         builder.run(request)

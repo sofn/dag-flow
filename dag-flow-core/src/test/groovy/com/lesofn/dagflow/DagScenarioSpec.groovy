@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.Consumer
 import java.util.function.Function
 
 /**
@@ -392,7 +393,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .funcNode("myConsumer", { c -> } as java.util.function.Consumer)
+                .funcNode("myConsumer", { c -> } as Consumer)
                 .run(ctx)
 
         then:

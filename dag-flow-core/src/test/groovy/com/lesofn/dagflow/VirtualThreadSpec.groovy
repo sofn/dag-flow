@@ -1,5 +1,6 @@
 package com.lesofn.dagflow
 
+import com.lesofn.dagflow.api.SyncCommand
 import com.lesofn.dagflow.test1.*
 import spock.lang.Specification
 
@@ -43,7 +44,7 @@ class VirtualThreadSpec extends Specification {
         when:
         def runner = new JobBuilder<Test1Context>()
                 .useVirtualThreads()
-                .addNode("syncNode", new com.lesofn.dagflow.api.SyncCommand<Test1Context, String>() {
+                .addNode("syncNode", new SyncCommand<Test1Context, String>() {
                     @Override
                     String run(Test1Context context) {
                         threadInfo.put("execThread", Thread.currentThread())
@@ -180,7 +181,7 @@ class VirtualThreadSpec extends Specification {
         def runner = new JobBuilder<Test1Context>()
                 .useVirtualThreads()
                 .addNode(Job1.class)
-                .addNode("syncJob", new com.lesofn.dagflow.api.SyncCommand<Test1Context, String>() {
+                .addNode("syncJob", new SyncCommand<Test1Context, String>() {
                     @Override
                     String run(Test1Context context) {
                         threadInfo.put("sync", Thread.currentThread().isVirtual())

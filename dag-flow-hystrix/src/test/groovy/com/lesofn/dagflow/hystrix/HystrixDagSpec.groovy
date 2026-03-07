@@ -3,6 +3,8 @@ package com.lesofn.dagflow.hystrix
 import com.lesofn.dagflow.model.DagNodeFactory
 import spock.lang.Specification
 
+import java.util.function.Function
+
 /**
  * Hystrix 集成测试（迁移自 hystrix/TestStarter）
  */
@@ -81,7 +83,7 @@ class HystrixDagSpec extends Specification {
         when:
         def runner = new HystrixJobBuilder<HystrixContext>()
                 .addHystrixNode(OriginHystrixJob.class)
-                .funcNode("downstream", { c -> "downstream_" + c.getResult("originHystrixJob") } as java.util.function.Function)
+                .funcNode("downstream", { c -> "downstream_" + c.getResult("originHystrixJob") } as Function)
                 .depend("originHystrixJob")
                 .run(request)
 
