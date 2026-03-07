@@ -26,9 +26,9 @@ public class DagNodeFactory<C extends DagFlowContext> {
     private static final Map<Class<?>, Constructor<?>> CLASS_CONSTRUCTOR_MAP = new HashMap<>();
 
     /**
-     * 注册的节点
+     * 注册的节点（LinkedHashMap 保持插入顺序，确保迭代时按拓扑序执行）
      */
-    private final Map<String, DagNode<C, ?>> nodeNameMap = new HashMap<>();
+    private final Map<String, DagNode<C, ?>> nodeNameMap = new LinkedHashMap<>();
 
     /**
      * class转node name，首字符小写，跟Spring bean逻辑一致
@@ -146,6 +146,19 @@ public class DagNodeFactory<C extends DagFlowContext> {
                 .forEach(it -> result.add(this.createBySpringBean(it)));
 
         return result;
+    }
+
+    /**
+     * 移除节点（回滚用）
+     */
+    public void removeNode(String nodeName) {
+        DagNode<C, ?> removed = nodeNameMap.remove(nodeName);
+        if (removed != null) {
+            // 清除其他节点对被移除节点的依赖引用
+            for (DagNode<C, ?> node : nodeNameMap.values()) {
+                node.getDepends().remove(removed);
+            }
+        }
     }
 
     public Collection<DagNode<C, ?>> getNodes() {

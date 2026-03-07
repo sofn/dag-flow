@@ -44,23 +44,27 @@ public class JobRunner<C extends DagFlowContext> {
                 node.setParentTraceContext(dagContext);
             }
 
-            //配置所有节点依赖关系
+            //Phase 1: 注册所有节点 future，并为有依赖的节点绑定触发链
             for (DagNode<C, ?> node : nodeFactory.getNodes()) {
-                //注册到context
                 futureMap.put(node.getName(), node.getFuture());
 
-                if (CollectionUtils.isEmpty(node.getDepends())) {
-                    log.info("start node direct: " + node.getName());
-                    node.startNode(context);
-                } else {
+                if (!CollectionUtils.isEmpty(node.getDepends())) {
                     CompletableFuture<?>[] depFutures = node.getDepends().stream()
-                            .map(it -> it.startNode(context))
+                            .map(DagNode::getFuture)
                             .toArray(CompletableFuture[]::new);
 
                     CompletableFuture.allOf(depFutures).exceptionally(e -> {
                         node.cancel();
                         return null;
                     }).thenRun(() -> node.startNode(context));
+                }
+            }
+
+            //Phase 2: 启动所有无依赖的根节点
+            for (DagNode<C, ?> node : nodeFactory.getNodes()) {
+                if (CollectionUtils.isEmpty(node.getDepends())) {
+                    log.info("start node direct: " + node.getName());
+                    node.startNode(context);
                 }
             }
             CompletableFuture.allOf(this.futureMap.values().toArray(new CompletableFuture[]{})).get();
