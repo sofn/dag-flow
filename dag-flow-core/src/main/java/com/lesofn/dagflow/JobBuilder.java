@@ -31,6 +31,11 @@ public class JobBuilder<C extends DagFlowContext> {
      */
     protected Executor executorOverride;
 
+    /**
+     * Whether replay recording is enabled
+     */
+    protected boolean replayEnabled;
+
     // ======================== Class-based node registration ========================
 
     /**
@@ -173,6 +178,15 @@ public class JobBuilder<C extends DagFlowContext> {
         return this;
     }
 
+    /**
+     * Enable replay recording. After execution, call {@code runner.getReplayRecord()}
+     * to access timing data and render Gantt charts / timelines.
+     */
+    public JobBuilder<C> enableReplay() {
+        this.replayEnabled = true;
+        return this;
+    }
+
     public JobRunner<C> run(C context) throws ExecutionException, InterruptedException {
         JobRunner<C> runner = new JobRunner<>();
         //每次运行，都执行一次初始化，重置状态
@@ -180,7 +194,7 @@ public class JobBuilder<C extends DagFlowContext> {
             node.init();
             node.setExecutorOverride(executorOverride);
         });
-        return runner.run(context, this.nodeFactory);
+        return runner.run(context, this.nodeFactory, this.replayEnabled);
     }
 
 }

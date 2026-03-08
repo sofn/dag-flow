@@ -8,6 +8,7 @@ import com.lesofn.dagflow.api.DagFlowCommand;
 import com.lesofn.dagflow.api.SyncCommand;
 import com.lesofn.dagflow.api.context.DagFlowContext;
 import com.lesofn.dagflow.executor.DagFlowDefaultExecutor;
+import com.lesofn.dagflow.replay.DagFlowReplayCollector;
 import com.lesofn.dagflow.tracing.DagFlowTracing;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
@@ -68,6 +69,11 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
      * OTel 父上下文，由 JobRunner 在 run 时设置
      */
     private Context parentTraceContext;
+
+    /**
+     * Replay collector, set by JobRunner when replay is enabled
+     */
+    private DagFlowReplayCollector replayCollector;
 
     private volatile boolean started;
 
@@ -150,7 +156,7 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
     /**
      * 获取命令类型名称，用于 tracing attribute
      */
-    String getCommandType() {
+    public String getCommandType() {
         if (instance instanceof SyncCommand) return "SyncCommand";
         if (instance instanceof BatchCommand) return "BatchCommand";
         if (instance instanceof AsyncCommand) return "AsyncCommand";
@@ -182,18 +188,30 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
     }
 
     private <R> void execute(CompletableFuture<R> future, Supplier<R> supplier, Span span) {
+        if (replayCollector != null) {
+            replayCollector.onNodeStart(name);
+        }
         try {
             future.complete(supplier.get());
             DagFlowTracing.endSpanOk(span);
+            if (replayCollector != null) {
+                replayCollector.onNodeEnd(name, true, null);
+            }
         } catch (Exception e) {
             log.error("DagFlow run error", e);
             future.completeExceptionally(e);
             DagFlowTracing.endSpanError(span, e);
+            if (replayCollector != null) {
+                replayCollector.onNodeEnd(name, false, e);
+            }
         }
     }
 
     @SuppressWarnings("unchecked")
     <B extends BatchCommand<C, P, R>, P, R> void batchExecute(C context, Context nodeContext, Span nodeSpan) {
+        if (replayCollector != null) {
+            replayCollector.onNodeStart(name);
+        }
         B batchNode = (B) this.instance;
         Executor executor = getExecutor();
         BatchStrategy strategy = batchNode.batchStrategy();
@@ -207,6 +225,9 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
                     "BatchStrategy requiredCount(" + strategy.getRequiredCount() + ") > batchParam size(" + batchParam.size() + ")");
             getFuture().completeExceptionally(ex);
             DagFlowTracing.endSpanError(nodeSpan, ex);
+            if (replayCollector != null) {
+                replayCollector.onNodeEnd(name, false, ex);
+            }
             return;
         }
 
@@ -251,6 +272,9 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
             CompletableFuture.allOf(childFutures.stream().map(Pair::getRight).toArray(CompletableFuture[]::new)).exceptionally(e -> {
                 getFuture().completeExceptionally(e);
                 DagFlowTracing.endSpanError(nodeSpan, e);
+                if (replayCollector != null) {
+                    replayCollector.onNodeEnd(name, false, e);
+                }
                 return null;
             }).thenRun(() -> {
                 if (childFutures.stream().map(Pair::getRight).noneMatch(CompletableFuture::isCompletedExceptionally)) {
@@ -269,6 +293,9 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
                             getFuture().completeExceptionally(error);
                             cancelRemaining(childFutures);
                             DagFlowTracing.endSpanError(nodeSpan, error);
+                            if (replayCollector != null) {
+                                replayCollector.onNodeEnd(name, false, error);
+                            }
                         }
                     }
                 });
@@ -299,6 +326,9 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
         if (getFuture().complete(map)) {
             cancelRemaining(childFutures);
             DagFlowTracing.endSpanOk(nodeSpan);
+            if (replayCollector != null) {
+                replayCollector.onNodeEnd(name, true, null);
+            }
         }
     }
 

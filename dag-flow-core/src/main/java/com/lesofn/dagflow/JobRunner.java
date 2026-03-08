@@ -7,6 +7,8 @@ import com.lesofn.dagflow.exception.DagFlowRunException;
 import com.lesofn.dagflow.model.DagNode;
 import com.lesofn.dagflow.model.DagNodeCheck;
 import com.lesofn.dagflow.model.DagNodeFactory;
+import com.lesofn.dagflow.replay.DagFlowReplay;
+import com.lesofn.dagflow.replay.DagFlowReplayCollector;
 import com.lesofn.dagflow.tracing.DagFlowTracing;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
@@ -15,9 +17,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 /**
  * @author sofn
@@ -28,8 +32,20 @@ public class JobRunner<C extends DagFlowContext> {
 
     private final Map<String, CompletableFuture<?>> futureMap = new HashMap<>();
     private final Map<Class<?>, String> classNodeNameMap = new HashMap<>();
+    private DagFlowReplay replayRecord;
+
+    /**
+     * Get the replay record after execution (null if replay was not enabled).
+     */
+    public DagFlowReplay getReplayRecord() {
+        return replayRecord;
+    }
 
     JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory) throws ExecutionException, InterruptedException {
+        return run(context, nodeFactory, false);
+    }
+
+    JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory, boolean replayEnabled) throws ExecutionException, InterruptedException {
         boolean hasCycle = DagNodeCheck.hasCycle(nodeFactory.getNodes());
         if (hasCycle) {
             throw new DagFlowCycleException("Cycle detected in DAG nodes");
@@ -37,12 +53,16 @@ public class JobRunner<C extends DagFlowContext> {
 
         context.setRunner(this);
 
+        // Replay collector (null when disabled — zero overhead)
+        DagFlowReplayCollector collector = replayEnabled ? new DagFlowReplayCollector() : null;
+
         Span dagSpan = DagFlowTracing.startDagSpan(nodeFactory.getNodes().size());
         Context dagContext = Context.current().with(dagSpan);
         try (Scope ignored = dagSpan.makeCurrent()) {
             //设置 OTel 父上下文到每个节点
             for (DagNode<C, ?> node : nodeFactory.getNodes()) {
                 node.setParentTraceContext(dagContext);
+                node.setReplayCollector(collector);
             }
 
             //Phase 1: 注册所有节点 future，并为有依赖的节点绑定触发链
@@ -50,6 +70,14 @@ public class JobRunner<C extends DagFlowContext> {
                 futureMap.put(node.getName(), node.getFuture());
                 if (node.getClazz() != null) {
                     classNodeNameMap.putIfAbsent(node.getClazz(), node.getName());
+                }
+
+                // Register node in replay collector
+                if (collector != null) {
+                    List<String> deps = node.getDepends().stream()
+                            .map(DagNode::getName)
+                            .collect(Collectors.toList());
+                    collector.registerNode(node.getName(), node.getCommandType(), deps);
                 }
 
                 if (!CollectionUtils.isEmpty(node.getDepends())) {
@@ -73,8 +101,16 @@ public class JobRunner<C extends DagFlowContext> {
             }
             CompletableFuture.allOf(this.futureMap.values().toArray(new CompletableFuture[]{})).get();
             DagFlowTracing.endSpanOk(dagSpan);
+            if (collector != null) {
+                collector.onDagEnd(true);
+                this.replayRecord = collector.build();
+            }
         } catch (Exception e) {
             DagFlowTracing.endSpanError(dagSpan, e);
+            if (collector != null) {
+                collector.onDagEnd(false);
+                this.replayRecord = collector.build();
+            }
             throw e;
         }
         return this;

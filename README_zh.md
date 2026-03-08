@@ -31,6 +31,7 @@
 - **虚拟线程** — `useVirtualThreads()` 启用 Java 21 虚拟线程，所有非 SyncCommand 节点在虚拟线程上执行；传统线程池作为默认模式保留
 - **智能线程池** — I/O 池（2x–8x 核心数）和 CPU 池（核心数+1），拒绝策略为 `CallerRunsPolicy`
 - **OpenTelemetry 链路追踪** — 内置 `opentelemetry-api` 分布式追踪；每次 DAG 执行创建根 Span，每个节点创建子 Span，批量子任务各自创建 Span — 无 SDK 时为 no-op，零开销
+- **Replay 执行回放** — `enableReplay()` 记录每个节点的开始/结束时间；支持文本甘特图和瀑布流时间线打印；Spring Boot Web UI 位于 `/dagflow/replay`，可配置 LRU 缓存条数
 - **错误传播** — 节点异常以 `ExecutionException` 传播，下游节点自动取消
 
 ## 模块结构
@@ -151,6 +152,8 @@ DagFlowCommand<C, R>                  // 基础接口: R run(C context)
 | `DagNodeCheck` | 基于 DFS 的环路检测，在执行前运行 |
 | `DagFlowDefaultExecutor` | 异步和计算节点的默认线程池配置 |
 | `DagFlowTracing` | OpenTelemetry 链路追踪工具 — 根 Span、节点 Span、批量子项 Span |
+| `DagFlowReplay` | 不可变的执行记录，包含每个节点的时间数据 |
+| `DagFlowReplayPrinter` | 文本甘特图和瀑布流时间线渲染器 |
 
 ### 默认线程池
 
@@ -397,6 +400,73 @@ Spring Boot 配置：
 dagflow.tracing-enabled=false
 ```
 
+### Replay 执行回放
+
+启用执行分析，记录每个节点的执行时间。执行完成后可打印文本甘特图或瀑布流时间线：
+
+```java
+JobRunner<MyContext> runner = new JobBuilder<MyContext>()
+        .enableReplay()                           // 启用执行记录
+        .node(FetchOrder.class)
+        .node(FetchUser.class)
+        .node(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
+        .node(BuildResult.class).depend(CalcDiscount.class)
+        .run(context);
+
+// 获取执行记录
+DagFlowReplay replay = runner.getReplayRecord();
+
+// 打印文本甘特图
+System.out.println(replay.toGantt());
+
+// 打印 Chrome DevTools 风格的瀑布流时间线
+System.out.println(replay.toTimeline());
+```
+
+甘特图输出示例：
+
+```
+DAG Execution [4 nodes, 250ms, SUCCESS]  14:30:05.123
+──────────────────────────────────────────────────────────────
+FetchOrder   |████████████                                  |   0- 120ms [Async]
+FetchUser    |██████                                        |   0-  60ms [Async]
+CalcDiscount |            ██████████████                    | 120- 220ms [Calc]
+BuildResult  |                          ████                | 220- 250ms [Sync]
+──────────────────────────────────────────────────────────────
+```
+
+瀑布流时间线输出示例：
+
+```
+DAG Timeline [4 nodes, 250ms, SUCCESS]  14:30:05.123
+──────────────────────────────────────────────────────────────
+             0ms   50ms  100ms 150ms 200ms 250ms
+             |     |     |     |     |     |
+FetchOrder   ██████████████░░░░░░░░░░░░░░░░  120ms  Async  pool-1-thread-2
+FetchUser    ████████░░░░░░░░░░░░░░░░░░░░░░   60ms  Async  pool-1-thread-3
+CalcDiscount ░░░░░░░░░░░░██████████████░░░░  100ms  Calc   ForkJoin-1
+BuildResult  ░░░░░░░░░░░░░░░░░░░░░░░░████░░   30ms  Sync   main
+──────────────────────────────────────────────────────────────
+```
+
+**Spring Boot Web UI：** 使用 `dag-flow-spring-boot-starter` 时，启用 replay Web 端点：
+
+```properties
+# application.properties
+dagflow.replay-enabled=true
+dagflow.replay-cache-size=100   # LRU 缓存：保留最近 N 条执行记录（默认：100）
+```
+
+访问 `http://localhost:8080/dagflow/replay` 即可查看交互式 HTML 瀑布流可视化。
+
+| 端点 | 说明 |
+|---|---|
+| `GET /dagflow/replay` | HTML 执行记录列表 |
+| `GET /dagflow/replay/{id}` | HTML 详情（含瀑布流图表） |
+| `GET /dagflow/replay/{id}/text` | 纯文本甘特图 + 时间线 |
+| `GET /dagflow/replay/api` | JSON 列表 |
+| `GET /dagflow/replay/api/{id}` | JSON 详情 |
+
 ### 自定义线程池
 
 为特定节点覆盖默认线程池：
@@ -436,6 +506,7 @@ dag-flow/
 │       ├── exception/                       # DagFlowBuildException, CycleException 等
 │       ├── executor/                        # 默认线程池配置
 │       ├── model/                           # DagNode, DagNodeCheck, DagNodeFactory
+│       ├── replay/                          # Replay 执行回放（DagFlowReplay, Printer）
 │       ├── tracing/                         # OpenTelemetry 链路追踪 (DagFlowTracing)
 │       └── spring/                          # 可选的 Spring 集成
 ├── dag-flow-hystrix/                        # Hystrix 扩展模块
@@ -447,9 +518,13 @@ dag-flow/
 │       ├── Resilience4jCommand.java         # Resilience4j 装饰器包装
 │       └── Resilience4jJobBuilder.java      # 提供 addResilience4jNode() 的构建器
 └── dag-flow-spring-boot-starter/            # Spring Boot 4 自动配置 Starter
-    └── src/main/java/com/lesofn/dagflow/spring/boot/autoconfigure/
-        ├── DagFlowAutoConfiguration.java    # 自动注册 SpringContextHolder
-        └── DagFlowProperties.java           # dagflow.enabled 配置
+    └── src/main/java/com/lesofn/dagflow/spring/boot/
+        ├── autoconfigure/
+        │   ├── DagFlowAutoConfiguration.java    # 自动注册 SpringContextHolder + replay Bean
+        │   └── DagFlowProperties.java           # dagflow.enabled, replay-enabled 等配置
+        └── replay/
+            ├── DagFlowReplayStore.java          # 执行记录 LRU 缓存
+            └── DagFlowReplayController.java     # Web 端点 (/dagflow/replay)
 ```
 
 ## 性能基准测试

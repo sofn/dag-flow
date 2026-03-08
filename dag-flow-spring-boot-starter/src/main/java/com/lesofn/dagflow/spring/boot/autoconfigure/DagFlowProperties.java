@@ -20,6 +20,16 @@ public class DagFlowProperties {
      */
     private boolean tracingEnabled = true;
 
+    /**
+     * 是否启用 replay 执行记录和 Web 端点
+     */
+    private boolean replayEnabled = false;
+
+    /**
+     * replay 记录缓存条数上限
+     */
+    private int replayCacheSize = 100;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -34,5 +44,21 @@ public class DagFlowProperties {
 
     public void setTracingEnabled(boolean tracingEnabled) {
         this.tracingEnabled = tracingEnabled;
+    }
+
+    public boolean isReplayEnabled() {
+        return replayEnabled;
+    }
+
+    public void setReplayEnabled(boolean replayEnabled) {
+        this.replayEnabled = replayEnabled;
+    }
+
+    public int getReplayCacheSize() {
+        return replayCacheSize;
+    }
+
+    public void setReplayCacheSize(int replayCacheSize) {
+        this.replayCacheSize = replayCacheSize;
     }
 }

@@ -31,6 +31,7 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 - **Virtual threads** — `useVirtualThreads()` enables Java 21 virtual threads for all non-sync nodes; traditional thread pools remain the default
 - **Smart thread pools** — I/O pool (2x–8x cores) and CPU pool (cores+1) with `CallerRunsPolicy`
 - **OpenTelemetry tracing** — Built-in distributed tracing via `opentelemetry-api`; creates root span per DAG run, child spans per node, and batch-item spans — no-op when SDK is absent
+- **Replay profiling** — `enableReplay()` records per-node start/end timing; print text-based Gantt charts and waterfall timelines; Spring Boot web UI at `/dagflow/replay` with configurable LRU cache
 - **Error propagation** — Node exceptions propagate as `ExecutionException`; downstream nodes are cancelled
 
 ## Module Structure
@@ -151,6 +152,8 @@ Extensions (SyncCommand-based):
 | `DagNodeCheck` | DFS-based cycle detection, runs before execution |
 | `DagFlowDefaultExecutor` | Default thread pool configuration for async and calc nodes |
 | `DagFlowTracing` | OpenTelemetry tracing utility — root, node, and batch-item spans |
+| `DagFlowReplay` | Immutable execution record with per-node timing data |
+| `DagFlowReplayPrinter` | Text-based Gantt chart and waterfall timeline renderer |
 
 ### Default Thread Pools
 
@@ -397,6 +400,73 @@ Spring Boot configuration:
 dagflow.tracing-enabled=false
 ```
 
+### Replay Profiling
+
+Enable execution profiling to record per-node timing data. After execution, print text-based Gantt charts or waterfall timelines:
+
+```java
+JobRunner<MyContext> runner = new JobBuilder<MyContext>()
+        .enableReplay()                           // enable profiling
+        .node(FetchOrder.class)
+        .node(FetchUser.class)
+        .node(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
+        .node(BuildResult.class).depend(CalcDiscount.class)
+        .run(context);
+
+// Get the replay record
+DagFlowReplay replay = runner.getReplayRecord();
+
+// Print text-based Gantt chart
+System.out.println(replay.toGantt());
+
+// Print Chrome DevTools-style waterfall timeline
+System.out.println(replay.toTimeline());
+```
+
+Example Gantt chart output:
+
+```
+DAG Execution [4 nodes, 250ms, SUCCESS]  14:30:05.123
+──────────────────────────────────────────────────────────────
+FetchOrder   |████████████                                  |   0- 120ms [Async]
+FetchUser    |██████                                        |   0-  60ms [Async]
+CalcDiscount |            ██████████████                    | 120- 220ms [Calc]
+BuildResult  |                          ████                | 220- 250ms [Sync]
+──────────────────────────────────────────────────────────────
+```
+
+Example waterfall timeline output:
+
+```
+DAG Timeline [4 nodes, 250ms, SUCCESS]  14:30:05.123
+──────────────────────────────────────────────────────────────
+             0ms   50ms  100ms 150ms 200ms 250ms
+             |     |     |     |     |     |
+FetchOrder   ██████████████░░░░░░░░░░░░░░░░  120ms  Async  pool-1-thread-2
+FetchUser    ████████░░░░░░░░░░░░░░░░░░░░░░   60ms  Async  pool-1-thread-3
+CalcDiscount ░░░░░░░░░░░░██████████████░░░░  100ms  Calc   ForkJoin-1
+BuildResult  ░░░░░░░░░░░░░░░░░░░░░░░░████░░   30ms  Sync   main
+──────────────────────────────────────────────────────────────
+```
+
+**Spring Boot web UI:** When using `dag-flow-spring-boot-starter`, enable the replay web endpoint:
+
+```properties
+# application.properties
+dagflow.replay-enabled=true
+dagflow.replay-cache-size=100   # LRU cache: keep last N executions (default: 100)
+```
+
+Then visit `http://localhost:8080/dagflow/replay` for an interactive HTML waterfall visualization.
+
+| Endpoint | Description |
+|---|---|
+| `GET /dagflow/replay` | HTML list of cached execution records |
+| `GET /dagflow/replay/{id}` | HTML detail with waterfall chart |
+| `GET /dagflow/replay/{id}/text` | Plain text Gantt + timeline |
+| `GET /dagflow/replay/api` | JSON list |
+| `GET /dagflow/replay/api/{id}` | JSON detail |
+
 ### Custom Executor
 
 Override the default thread pool for specific nodes:
@@ -436,6 +506,7 @@ dag-flow/
 │       ├── exception/                       # DagFlowBuildException, CycleException, etc.
 │       ├── executor/                        # Default thread pool configuration
 │       ├── model/                           # DagNode, DagNodeCheck, DagNodeFactory
+│       ├── replay/                          # Replay profiling (DagFlowReplay, Printer)
 │       ├── tracing/                         # OpenTelemetry tracing (DagFlowTracing)
 │       └── spring/                          # Optional Spring integration
 ├── dag-flow-hystrix/                        # Hystrix extension module
@@ -447,9 +518,13 @@ dag-flow/
 │       ├── Resilience4jCommand.java         # Resilience4j decorator wrapper
 │       └── Resilience4jJobBuilder.java      # Builder with addResilience4jNode()
 └── dag-flow-spring-boot-starter/            # Spring Boot 4 auto-configuration starter
-    └── src/main/java/com/lesofn/dagflow/spring/boot/autoconfigure/
-        ├── DagFlowAutoConfiguration.java    # Auto-registers SpringContextHolder
-        └── DagFlowProperties.java           # dagflow.enabled configuration
+    └── src/main/java/com/lesofn/dagflow/spring/boot/
+        ├── autoconfigure/
+        │   ├── DagFlowAutoConfiguration.java    # Auto-registers SpringContextHolder + replay beans
+        │   └── DagFlowProperties.java           # dagflow.enabled, replay-enabled, etc.
+        └── replay/
+            ├── DagFlowReplayStore.java          # LRU cache for execution records
+            └── DagFlowReplayController.java     # Web endpoint (/dagflow/replay)
 ```
 
 ## Performance Benchmark
