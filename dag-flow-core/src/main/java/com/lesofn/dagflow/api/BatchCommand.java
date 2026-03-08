@@ -47,6 +47,6 @@ public interface BatchCommand<C extends DagFlowContext, P, R> extends AsyncComma
 
     @Override
     default Map<P, R> run(C context) throws Exception {
-        throw new DagFlowRunException("批量任务禁止执行此方法");
+        throw new DagFlowRunException("BatchCommand must not call run(context) directly");
     }
 }

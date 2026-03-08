@@ -31,7 +31,7 @@ public class JobRunner<C extends DagFlowContext> {
     JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory) throws ExecutionException, InterruptedException {
         boolean hasCycle = DagNodeCheck.hasCycle(nodeFactory.getNodes());
         if (hasCycle) {
-            throw new DagFlowCycleException("不能有循环节点");
+            throw new DagFlowCycleException("Cycle detected in DAG nodes");
         }
 
         context.setRunner(this);
@@ -81,7 +81,7 @@ public class JobRunner<C extends DagFlowContext> {
         String nodeName = DagNodeFactory.getClassNodeName(clazz);
         CompletableFuture<?> future = futureMap.get(nodeName);
         if (future == null) {
-            throw new DagFlowRunException("节点未注册: " + nodeName);
+            throw new DagFlowRunException("Node not registered: " + nodeName);
         }
         return getFutureValue(nodeName, future);
     }

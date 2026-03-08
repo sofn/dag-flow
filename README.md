@@ -19,7 +19,7 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 ## Features
 
 - **DAG-based parallel execution** — Automatically maximizes parallelism based on declared dependencies using `CompletableFuture`
-- **Multiple command types** — `SyncCommand` (caller thread), `AsyncCommand` (I/O pool), `CalcCommand` (CPU pool), `BatchCommand` (fan-out)
+- **Multiple command types** — `SyncCommand` (caller thread), `AsyncCommand` (I/O pool), `CalcCommand` (CPU pool), `BatchCommand` (fan-out with ALL/ANY/AT_LEAST_N strategies)
 - **Cycle detection** — DFS-based cycle detection before execution with clear error reporting
 - **Fluent builder API** — Chain `.addNode().depend()` calls; builder is reusable across runs
 - **Lambda support** — `funcNode()` accepts `Function<C, R>` or `Consumer<C>` for lightweight nodes
@@ -29,6 +29,7 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 - **Spring Boot Starter** — `dag-flow-spring-boot-starter` auto-configures dag-flow engine; `dependSpringBean()` works out of the box
 - **Virtual threads** — `useVirtualThreads()` enables Java 21 virtual threads for all non-sync nodes; traditional thread pools remain the default
 - **Smart thread pools** — I/O pool (2x–8x cores) and CPU pool (cores+1) with `CallerRunsPolicy`
+- **OpenTelemetry tracing** — Built-in distributed tracing via `opentelemetry-api`; creates root span per DAG run, child spans per node, and batch-item spans — no-op when SDK is absent
 - **Error propagation** — Node exceptions propagate as `ExecutionException`; downstream nodes are cancelled
 
 ## Module Structure
@@ -128,7 +129,7 @@ FetchOrder   FetchUser      ← parallel (no mutual dependency)
 DagFlowCommand<C, R>                  // Base: R run(C context)
 ├── SyncCommand<C, R>                  // Runs on caller thread
 ├── AsyncCommand<C, R>                 // Runs on I/O thread pool
-│   └── BatchCommand<C, P, R>          // Fan-out per param → Map<P, R>
+│   └── BatchCommand<C, P, R>          // Fan-out per param → Map<P, R> (ALL/ANY/atLeast)
 └── CalcCommand<C, R>                  // Runs on CPU thread pool
         ├── FunctionCommand            // Lambda Function<C, R> wrapper
         └── ConsumerCommand            // Lambda Consumer<C> wrapper
@@ -148,6 +149,7 @@ Extensions (SyncCommand-based):
 | `DagNode` | Runtime node wrapping a command with its future and dependencies |
 | `DagNodeCheck` | DFS-based cycle detection, runs before execution |
 | `DagFlowDefaultExecutor` | Default thread pool configuration for async and calc nodes |
+| `DagFlowTracing` | OpenTelemetry tracing utility — root, node, and batch-item spans |
 
 ### Default Thread Pools
 
@@ -193,6 +195,36 @@ public class BatchFetch implements BatchCommand<MyContext, Long, String> {
 
 // Result is Map<Long, String>
 Map<Long, String> results = runner.getResult(BatchFetch.class);
+```
+
+#### Batch Execution Strategies
+
+By default, `BatchCommand` waits for **all** sub-tasks to complete. Override `batchStrategy()` to change this:
+
+| Strategy | Description |
+|---|---|
+| `BatchStrategy.ALL` | Wait for all sub-tasks (default) |
+| `BatchStrategy.ANY` | Return as soon as **1** sub-task completes; cancel the rest |
+| `BatchStrategy.atLeast(n)` | Return as soon as **n** sub-tasks complete; cancel the rest |
+
+```java
+public class FastBatchFetch implements BatchCommand<MyContext, Long, String> {
+    @Override
+    public Set<Long> batchParam(MyContext context) {
+        return Set.of(1L, 2L, 3L, 4L, 5L);
+    }
+
+    @Override
+    public String run(MyContext context, Long param) {
+        return fetchFromReplica(param);
+    }
+
+    @Override
+    public BatchStrategy batchStrategy() {
+        return BatchStrategy.ANY;             // first result wins
+        // return BatchStrategy.atLeast(3);   // wait for at least 3
+    }
+}
 ```
 
 ### In-Class Dependency Declaration
@@ -310,6 +342,40 @@ JobRunner<MyContext> runner = new JobBuilder<MyContext>()
 - `AsyncCommand` / `CalcCommand` — runs on virtual threads instead of platform thread pools
 - Without `useVirtualThreads()`, the traditional I/O and CPU thread pools are used (default behavior)
 
+### OpenTelemetry Tracing
+
+dag-flow automatically creates distributed tracing spans for every DAG execution. When `opentelemetry-api` is on the classpath:
+
+- A **root span** (`dagflow.run`) is created per DAG execution with a `dagflow.node.count` attribute
+- Each **node** gets a child span (`dagflow.node.<name>`) with `dagflow.node.name` and `dagflow.node.type` attributes
+- Each **batch sub-task** gets its own child span (`dagflow.batch.<name>`) with the `dagflow.batch.param` attribute
+
+When no OpenTelemetry SDK is configured, all tracing operations are **no-op** with zero overhead.
+
+```java
+// Option 1: Use GlobalOpenTelemetry (default — zero configuration needed)
+// Just configure OpenTelemetry SDK globally as usual
+
+// Option 2: Provide a custom instance
+DagFlowTracing.setOpenTelemetry(myOpenTelemetrySdk);
+
+// Then run the DAG as normal — spans are created automatically
+new JobBuilder<MyContext>()
+        .addNode(FetchOrder.class)
+        .addNode(CalcDiscount.class).depend(FetchOrder.class)
+        .run(context);
+
+// Reset to GlobalOpenTelemetry
+DagFlowTracing.setOpenTelemetry(null);
+```
+
+Spring Boot configuration:
+
+```properties
+# Disable tracing (default: true)
+dagflow.tracing-enabled=false
+```
+
 ### Custom Executor
 
 Override the default thread pool for specific nodes:
@@ -342,12 +408,14 @@ dag-flow/
 │       │   ├── AsyncCommand.java            # Async (I/O) command
 │       │   ├── CalcCommand.java             # CPU-bound command
 │       │   ├── BatchCommand.java            # Batch fan-out command
+│       │   ├── BatchStrategy.java           # Batch strategies: ALL, ANY, atLeast(N)
 │       │   ├── context/                     # Context & injection interfaces
 │       │   ├── depend/                      # Dependency declaration interface
 │       │   └── function/                    # Lambda wrappers
 │       ├── exception/                       # DagFlowBuildException, CycleException, etc.
 │       ├── executor/                        # Default thread pool configuration
 │       ├── model/                           # DagNode, DagNodeCheck, DagNodeFactory
+│       ├── tracing/                         # OpenTelemetry tracing (DagFlowTracing)
 │       └── spring/                          # Optional Spring integration
 ├── dag-flow-hystrix/                        # Hystrix extension module
 │   └── src/main/java/com/lesofn/dagflow/hystrix/

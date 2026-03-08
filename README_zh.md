@@ -19,7 +19,7 @@
 ## 特性
 
 - **基于 DAG 的并行执行** — 基于 `CompletableFuture`，根据声明的依赖关系自动最大化并行度
-- **多种命令类型** — `SyncCommand`（调用线程）、`AsyncCommand`（I/O 线程池）、`CalcCommand`（CPU 线程池）、`BatchCommand`（扇出）
+- **多种命令类型** — `SyncCommand`（调用线程）、`AsyncCommand`（I/O 线程池）、`CalcCommand`（CPU 线程池）、`BatchCommand`（扇出，支持 ALL/ANY/AT_LEAST_N 策略）
 - **环路检测** — 执行前基于 DFS 的环路检测，清晰的错误报告
 - **流式构建 API** — 链式调用 `.addNode().depend()`；Builder 可跨多次运行复用
 - **Lambda 支持** — `funcNode()` 接受 `Function<C, R>` 或 `Consumer<C>`，轻量级节点无需建类
@@ -29,6 +29,7 @@
 - **Spring Boot Starter** — `dag-flow-spring-boot-starter` 自动配置 dag-flow 引擎，`dependSpringBean()` 开箱即用
 - **虚拟线程** — `useVirtualThreads()` 启用 Java 21 虚拟线程，所有非 SyncCommand 节点在虚拟线程上执行；传统线程池作为默认模式保留
 - **智能线程池** — I/O 池（2x–8x 核心数）和 CPU 池（核心数+1），拒绝策略为 `CallerRunsPolicy`
+- **OpenTelemetry 链路追踪** — 内置 `opentelemetry-api` 分布式追踪；每次 DAG 执行创建根 Span，每个节点创建子 Span，批量子任务各自创建 Span — 无 SDK 时为 no-op，零开销
 - **错误传播** — 节点异常以 `ExecutionException` 传播，下游节点自动取消
 
 ## 模块结构
@@ -128,7 +129,7 @@ FetchOrder   FetchUser      ← 并行执行（无相互依赖）
 DagFlowCommand<C, R>                  // 基础接口: R run(C context)
 ├── SyncCommand<C, R>                  // 在调用线程执行
 ├── AsyncCommand<C, R>                 // 在 I/O 线程池执行
-│   └── BatchCommand<C, P, R>          // 按参数扇出 → Map<P, R>
+│   └── BatchCommand<C, P, R>          // 按参数扇出 → Map<P, R>（ALL/ANY/atLeast）
 └── CalcCommand<C, R>                  // 在 CPU 线程池执行
         ├── FunctionCommand            // Lambda Function<C, R> 包装
         └── ConsumerCommand            // Lambda Consumer<C> 包装
@@ -148,6 +149,7 @@ DagFlowCommand<C, R>                  // 基础接口: R run(C context)
 | `DagNode` | 运行时节点，包装命令及其 Future 和依赖关系 |
 | `DagNodeCheck` | 基于 DFS 的环路检测，在执行前运行 |
 | `DagFlowDefaultExecutor` | 异步和计算节点的默认线程池配置 |
+| `DagFlowTracing` | OpenTelemetry 链路追踪工具 — 根 Span、节点 Span、批量子项 Span |
 
 ### 默认线程池
 
@@ -193,6 +195,36 @@ public class BatchFetch implements BatchCommand<MyContext, Long, String> {
 
 // 结果为 Map<Long, String>
 Map<Long, String> results = runner.getResult(BatchFetch.class);
+```
+
+#### 批量执行策略
+
+默认情况下，`BatchCommand` 等待**所有**子任务完成。覆盖 `batchStrategy()` 可改变此行为：
+
+| 策略 | 说明 |
+|---|---|
+| `BatchStrategy.ALL` | 等待所有子任务完成（默认） |
+| `BatchStrategy.ANY` | **1** 个子任务完成即返回，取消其余 |
+| `BatchStrategy.atLeast(n)` | **n** 个子任务完成即返回，取消其余 |
+
+```java
+public class FastBatchFetch implements BatchCommand<MyContext, Long, String> {
+    @Override
+    public Set<Long> batchParam(MyContext context) {
+        return Set.of(1L, 2L, 3L, 4L, 5L);
+    }
+
+    @Override
+    public String run(MyContext context, Long param) {
+        return fetchFromReplica(param);
+    }
+
+    @Override
+    public BatchStrategy batchStrategy() {
+        return BatchStrategy.ANY;             // 最先完成的结果胜出
+        // return BatchStrategy.atLeast(3);   // 等待至少 3 个完成
+    }
+}
 ```
 
 ### 类内依赖声明
@@ -310,6 +342,40 @@ JobRunner<MyContext> runner = new JobBuilder<MyContext>()
 - `AsyncCommand` / `CalcCommand` — 在虚拟线程上执行，替代传统线程池
 - 不调用 `useVirtualThreads()` 时，使用传统 I/O 和 CPU 线程池（默认行为）
 
+### OpenTelemetry 链路追踪
+
+dag-flow 自动为每次 DAG 执行创建分布式追踪 Span。当 classpath 中包含 `opentelemetry-api` 时：
+
+- 每次 DAG 执行创建**根 Span**（`dagflow.run`），包含 `dagflow.node.count` 属性
+- 每个**节点**创建子 Span（`dagflow.node.<name>`），包含 `dagflow.node.name` 和 `dagflow.node.type` 属性
+- 每个**批量子任务**创建独立子 Span（`dagflow.batch.<name>`），包含 `dagflow.batch.param` 属性
+
+未配置 OpenTelemetry SDK 时，所有追踪操作均为 **no-op**，零性能开销。
+
+```java
+// 方式一：使用 GlobalOpenTelemetry（默认 — 零配置）
+// 按常规方式全局配置 OpenTelemetry SDK 即可
+
+// 方式二：提供自定义实例
+DagFlowTracing.setOpenTelemetry(myOpenTelemetrySdk);
+
+// 正常运行 DAG — Span 自动创建
+new JobBuilder<MyContext>()
+        .addNode(FetchOrder.class)
+        .addNode(CalcDiscount.class).depend(FetchOrder.class)
+        .run(context);
+
+// 重置为 GlobalOpenTelemetry
+DagFlowTracing.setOpenTelemetry(null);
+```
+
+Spring Boot 配置：
+
+```properties
+# 禁用链路追踪（默认：true）
+dagflow.tracing-enabled=false
+```
+
 ### 自定义线程池
 
 为特定节点覆盖默认线程池：
@@ -342,12 +408,14 @@ dag-flow/
 │       │   ├── AsyncCommand.java            # 异步 (I/O) 命令
 │       │   ├── CalcCommand.java             # CPU 密集型命令
 │       │   ├── BatchCommand.java            # 批量扇出命令
+│       │   ├── BatchStrategy.java           # 批量策略：ALL / ANY / atLeast(N)
 │       │   ├── context/                     # Context 和注入接口
 │       │   ├── depend/                      # 依赖声明接口
 │       │   └── function/                    # Lambda 包装器
 │       ├── exception/                       # DagFlowBuildException, CycleException 等
 │       ├── executor/                        # 默认线程池配置
 │       ├── model/                           # DagNode, DagNodeCheck, DagNodeFactory
+│       ├── tracing/                         # OpenTelemetry 链路追踪 (DagFlowTracing)
 │       └── spring/                          # 可选的 Spring 集成
 ├── dag-flow-hystrix/                        # Hystrix 扩展模块
 │   └── src/main/java/com/lesofn/dagflow/hystrix/

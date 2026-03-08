@@ -27,13 +27,13 @@ public class SpringContextHolder implements ApplicationContextAware, DisposableB
 
     @Override
     public void destroy() {
-        log.debug("清除SpringContextHolder中的ApplicationContext:" + applicationContext);
+        log.debug("Clearing ApplicationContext in SpringContextHolder: " + applicationContext);
         SpringContextHolder.applicationContext = null;
     }
 
     public static ApplicationContext getApplicationContext() {
         if (SpringContextHolder.applicationContext == null) {
-            throw new IllegalStateException("applicaitonContext未注入,请在applicationContext.xml中定义SpringContextHolder");
+            throw new IllegalStateException("ApplicationContext has not been injected. Please define SpringContextHolder in applicationContext.xml");
         }
         return applicationContext;
     }

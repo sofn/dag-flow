@@ -14,6 +14,6 @@ public class JobError1 implements AsyncCommand<Test1Context, String> {
     @Override
     public String run(Test1Context context) {
         log.info("JobError1 start");
-        throw new RuntimeException("出错啦");
+        throw new RuntimeException("Something went wrong");
     }
 }
