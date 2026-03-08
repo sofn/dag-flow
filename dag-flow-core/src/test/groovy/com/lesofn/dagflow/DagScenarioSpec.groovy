@@ -164,7 +164,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
+                .node(AsyncJobA.class)
                 .run(ctx)
 
         then:
@@ -179,7 +179,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(SyncJobA.class)
+                .node(SyncJobA.class)
                 .run(ctx)
 
         then:
@@ -194,7 +194,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(CalcJobA.class)
+                .node(CalcJobA.class)
                 .run(ctx)
 
         then:
@@ -211,9 +211,9 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .addNode(AsyncJobB.class)
-                .addNode(AsyncJobC.class)
+                .node(AsyncJobA.class)
+                .node(AsyncJobB.class)
+                .node(AsyncJobC.class)
                 .run(ctx)
 
         then: "all nodes complete and return correct results"
@@ -231,8 +231,8 @@ class DagScenarioSpec extends Specification {
         when:
         long start = System.currentTimeMillis()
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(SlowJobA.class)
-                .addNode(SlowJobB.class)
+                .node(SlowJobA.class)
+                .node(SlowJobB.class)
                 .run(ctx)
         long elapsed = System.currentTimeMillis() - start
 
@@ -252,9 +252,9 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .addNode(AsyncJobB.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobC.class).depend(AsyncJobB.class)
+                .node(AsyncJobA.class)
+                .node(AsyncJobB.class).depend(AsyncJobA.class)
+                .node(AsyncJobC.class).depend(AsyncJobB.class)
                 .run(ctx)
 
         then:
@@ -275,10 +275,10 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .addNode(AsyncJobB.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobC.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobD.class).depend(AsyncJobB.class, AsyncJobC.class)
+                .node(AsyncJobA.class)
+                .node(AsyncJobB.class).depend(AsyncJobA.class)
+                .node(AsyncJobC.class).depend(AsyncJobA.class)
+                .node(AsyncJobD.class).depend(AsyncJobB.class, AsyncJobC.class)
                 .run(ctx)
 
         then:
@@ -298,10 +298,10 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .addNode(AsyncJobB.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobC.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobD.class).depend(AsyncJobA.class)
+                .node(AsyncJobA.class)
+                .node(AsyncJobB.class).depend(AsyncJobA.class)
+                .node(AsyncJobC.class).depend(AsyncJobA.class)
+                .node(AsyncJobD.class).depend(AsyncJobA.class)
                 .run(ctx)
 
         then:
@@ -321,10 +321,10 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .addNode(AsyncJobB.class)
-                .addNode(AsyncJobC.class)
-                .addNode(AsyncJobD.class).depend(AsyncJobA.class, AsyncJobB.class, AsyncJobC.class)
+                .node(AsyncJobA.class)
+                .node(AsyncJobB.class)
+                .node(AsyncJobC.class)
+                .node(AsyncJobD.class).depend(AsyncJobA.class, AsyncJobB.class, AsyncJobC.class)
                 .run(ctx)
 
         then:
@@ -339,8 +339,8 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(SlowJobA.class)
-                .addNode(SlowJobC.class).depend(SlowJobA.class)
+                .node(SlowJobA.class)
+                .node(SlowJobC.class).depend(SlowJobA.class)
                 .run(ctx)
 
         then: "SlowC starts after SlowA completes"
@@ -359,7 +359,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .funcNode("square", func { c -> 42 * 42 })
+                .node("square", func { c -> 42 * 42 })
                 .run(ctx)
 
         then:
@@ -374,9 +374,9 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .funcNode("func1", func { c -> "from_func1" }).depend(AsyncJobA.class)
-                .funcNode("func2", func { c -> "from_func2" }).depend("func1")
+                .node(AsyncJobA.class)
+                .node("func1", func { c -> "from_func1" }).depend(AsyncJobA.class)
+                .node("func2", func { c -> "from_func2" }).depend("func1")
                 .run(ctx)
 
         then:
@@ -393,7 +393,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .funcNode("myConsumer", { c -> } as Consumer)
+                .node("myConsumer", { c -> } as Consumer)
                 .run(ctx)
 
         then:
@@ -411,9 +411,9 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(SyncJobA.class)
-                .addNode(AsyncJobA.class).depend(SyncJobA.class)
-                .addNode(CalcJobA.class).depend(AsyncJobA.class)
+                .node(SyncJobA.class)
+                .node(AsyncJobA.class).depend(SyncJobA.class)
+                .node(CalcJobA.class).depend(AsyncJobA.class)
                 .run(ctx)
 
         then:
@@ -430,8 +430,8 @@ class DagScenarioSpec extends Specification {
         given: "build cycle: AsyncJobA -> AsyncJobB -> AsyncJobA"
         def ctx = new SimpleContext(name: "cycle")
         def builder = new JobBuilder<SimpleContext>()
-        builder.addNode(AsyncJobA.class).depend(AsyncJobB.class)
-        builder.addNode(AsyncJobB.class).depend(AsyncJobA.class)
+        builder.node(AsyncJobA.class).depend(AsyncJobB.class)
+        builder.node(AsyncJobB.class).depend(AsyncJobA.class)
 
         when:
         builder.run(ctx)
@@ -445,10 +445,10 @@ class DagScenarioSpec extends Specification {
         given:
         def ctx = new SimpleContext(name: "unregistered")
         def builder = new JobBuilder<SimpleContext>()
-        builder.funcNode("nodeA", func { c -> "a" })
+        builder.node("nodeA", func { c -> "a" })
 
         when:
-        builder.funcNode("nodeB", func { c -> "b" }).depend("nonExistentNode")
+        builder.node("nodeB", func { c -> "b" }).depend("nonExistentNode")
 
         then:
         thrown(DagFlowBuildException)
@@ -464,7 +464,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         new JobBuilder<SimpleContext>()
-                .addNode(ErrorJob.class)
+                .node(ErrorJob.class)
                 .run(ctx)
 
         then:
@@ -479,8 +479,8 @@ class DagScenarioSpec extends Specification {
 
         when:
         new JobBuilder<SimpleContext>()
-                .addNode(ErrorJob.class)
-                .addNode(AsyncJobA.class).depend(ErrorJob.class)
+                .node(ErrorJob.class)
+                .node(AsyncJobA.class).depend(ErrorJob.class)
                 .run(ctx)
 
         then:
@@ -497,9 +497,9 @@ class DagScenarioSpec extends Specification {
 
         when:
         new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .addNode(ErrorJob.class)
-                .addNode(AsyncJobB.class).depend(ErrorJob.class)
+                .node(AsyncJobA.class)
+                .node(ErrorJob.class)
+                .node(AsyncJobB.class).depend(ErrorJob.class)
                 .run(ctx)
 
         then:
@@ -516,7 +516,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(NullResultJob.class)
+                .node(NullResultJob.class)
                 .run(ctx)
 
         then:
@@ -534,7 +534,7 @@ class DagScenarioSpec extends Specification {
         def ctx1 = new SimpleContext(name: "run1")
         def ctx2 = new SimpleContext(name: "run2")
         def builder = new JobBuilder<SimpleContext>()
-        builder.addNode(CountingJob.class)
+        builder.node(CountingJob.class)
 
         when:
         def runner1 = builder.run(ctx1)
@@ -556,7 +556,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode("myCustomNode", AsyncJobA.class)
+                .node("myCustomNode", AsyncJobA.class)
                 .run(ctx)
 
         then:
@@ -574,7 +574,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode("instanceNode", cmd)
+                .node("instanceNode", cmd)
                 .run(ctx)
 
         then:
@@ -588,7 +588,7 @@ class DagScenarioSpec extends Specification {
         given:
         def ctx = new SimpleContext(name: "test")
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
+                .node(AsyncJobA.class)
                 .run(ctx)
 
         when:
@@ -627,7 +627,7 @@ class DagScenarioSpec extends Specification {
         def ctx = new SimpleContext(name: "mass-parallel")
         def builder = new JobBuilder<SimpleContext>()
         20.times { i ->
-            builder.funcNode("node_${i}" as String, func { c -> "result_${i}" })
+            builder.node("node_${i}" as String, func { c -> "result_${i}" })
         }
 
         when:
@@ -647,9 +647,9 @@ class DagScenarioSpec extends Specification {
         given:
         def ctx = new SimpleContext(name: "long-chain")
         def builder = new JobBuilder<SimpleContext>()
-        builder.funcNode("chain_0", func { c -> 0 })
+        builder.node("chain_0", func { c -> 0 })
         (1..9).each { i ->
-            builder.funcNode("chain_${i}" as String, func { c -> i }).depend("chain_${i - 1}" as String)
+            builder.node("chain_${i}" as String, func { c -> i }).depend("chain_${i - 1}" as String)
         }
 
         when:
@@ -673,11 +673,11 @@ class DagScenarioSpec extends Specification {
         given:
         def ctx = new SimpleContext(name: "wide-diamond")
         def builder = new JobBuilder<SimpleContext>()
-        builder.funcNode("root", func { c -> "root" })
-        builder.funcNode("m1", func { c -> "m1" }).depend("root")
-        builder.funcNode("m2", func { c -> "m2" }).depend("root")
-        builder.funcNode("m3", func { c -> "m3" }).depend("root")
-        builder.funcNode("sink", func { c -> "sink" }).depend("m1", "m2", "m3")
+        builder.node("root", func { c -> "root" })
+        builder.node("m1", func { c -> "m1" }).depend("root")
+        builder.node("m2", func { c -> "m2" }).depend("root")
+        builder.node("m3", func { c -> "m3" }).depend("root")
+        builder.node("sink", func { c -> "sink" }).depend("m1", "m2", "m3")
 
         when:
         def runner = builder.run(ctx)
@@ -706,11 +706,11 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .addNode(AsyncJobB.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobC.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobD.class).depend(AsyncJobB.class, AsyncJobC.class)
-                .addNode(AsyncJobE.class).depend(AsyncJobD.class, AsyncJobA.class)
+                .node(AsyncJobA.class)
+                .node(AsyncJobB.class).depend(AsyncJobA.class)
+                .node(AsyncJobC.class).depend(AsyncJobA.class)
+                .node(AsyncJobD.class).depend(AsyncJobB.class, AsyncJobC.class)
+                .node(AsyncJobE.class).depend(AsyncJobD.class, AsyncJobA.class)
                 .run(ctx)
 
         then:
@@ -731,11 +731,11 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .funcNode("producer", func { SimpleContext c ->
+                .node("producer", func { SimpleContext c ->
                     c.data.put("key", "value")
                     return "produced"
                 })
-                .funcNode("consumer_node", func { SimpleContext c ->
+                .node("consumer_node", func { SimpleContext c ->
                     return "got:" + c.data.get("key")
                 }).depend("producer")
                 .run(ctx)
@@ -758,7 +758,7 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .funcNode("custom", func { c -> "custom_result" }, customExecutor)
+                .node("custom", func { c -> "custom_result" }, customExecutor)
                 .run(ctx)
 
         then:
@@ -784,12 +784,12 @@ class DagScenarioSpec extends Specification {
 
         when:
         def runner = new JobBuilder<SimpleContext>()
-                .addNode(AsyncJobA.class)
-                .addNode(AsyncJobB.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobC.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobD.class).depend(AsyncJobA.class)
-                .addNode(AsyncJobE.class).depend(AsyncJobB.class, AsyncJobC.class)
-                .funcNode("F", func { c -> "resultF" }).depend(AsyncJobD.class, AsyncJobE.class)
+                .node(AsyncJobA.class)
+                .node(AsyncJobB.class).depend(AsyncJobA.class)
+                .node(AsyncJobC.class).depend(AsyncJobA.class)
+                .node(AsyncJobD.class).depend(AsyncJobA.class)
+                .node(AsyncJobE.class).depend(AsyncJobB.class, AsyncJobC.class)
+                .node("F", func { c -> "resultF" }).depend(AsyncJobD.class, AsyncJobE.class)
                 .run(ctx)
 
         then:

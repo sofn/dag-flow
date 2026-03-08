@@ -100,7 +100,7 @@ class Resilience4jDagSpec extends Specification {
 
         when:
         def runner = new Resilience4jJobBuilder<SimpleContext>()
-                .funcNode("upstream", { c -> "upstream_result" } as Function)
+                .node("upstream", { c -> "upstream_result" } as Function)
                 .addResilience4jNode("r4jNode", command).depend("upstream")
                 .run(ctx)
 

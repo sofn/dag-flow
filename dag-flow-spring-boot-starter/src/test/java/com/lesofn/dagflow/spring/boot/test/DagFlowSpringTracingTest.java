@@ -57,7 +57,7 @@ class DagFlowSpringTracingTest {
         context.setName("tracing");
 
         JobRunner<TestSpringContext> runner = new JobBuilder<TestSpringContext>()
-                .addNode(SpringJob1.class)
+                .node(SpringJob1.class)
                 .dependSpringBean("springJob2")
                 .run(context);
 
@@ -88,7 +88,7 @@ class DagFlowSpringTracingTest {
         context.setName("func");
 
         new JobBuilder<TestSpringContext>()
-                .funcNode("greet", (Function<TestSpringContext, String>) c -> "hello_" + c.getName())
+                .node("greet", (Function<TestSpringContext, String>) c -> "hello_" + c.getName())
                 .run(context);
 
         List<SpanData> spans = spanExporter.getFinishedSpanItems();

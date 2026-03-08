@@ -28,7 +28,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("batch", new AllBatchJob())
+                .node("batch", new AllBatchJob())
                 .run(ctx)
 
         then:
@@ -44,7 +44,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         new JobBuilder<Ctx>()
-                .addNode("batch", new FailAtBatchJob(1L, BatchStrategy.ALL))
+                .node("batch", new FailAtBatchJob(1L, BatchStrategy.ALL))
                 .run(ctx)
 
         then:
@@ -72,7 +72,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("batch", new LatchBatchJob(latch, [0L] as Set, BatchStrategy.ANY))
+                .node("batch", new LatchBatchJob(latch, [0L] as Set, BatchStrategy.ANY))
                 .run(ctx)
 
         then:
@@ -92,7 +92,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("batch", new LatchBatchJob(latch, [0L] as Set, BatchStrategy.ANY))
+                .node("batch", new LatchBatchJob(latch, [0L] as Set, BatchStrategy.ANY))
                 .run(ctx)
 
         then:
@@ -110,7 +110,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("batch", new FastAnyBatchJob())
+                .node("batch", new FastAnyBatchJob())
                 .run(ctx)
 
         then:
@@ -126,7 +126,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         new JobBuilder<Ctx>()
-                .addNode("batch", new AllFailBatchJob(BatchStrategy.ANY))
+                .node("batch", new AllFailBatchJob(BatchStrategy.ANY))
                 .run(ctx)
 
         then:
@@ -144,7 +144,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("batch", new LatchBatchJob(latch, fastParams, BatchStrategy.atLeast(3)))
+                .node("batch", new LatchBatchJob(latch, fastParams, BatchStrategy.atLeast(3)))
                 .run(ctx)
 
         then:
@@ -165,7 +165,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("batch", new LatchBatchJob(latch, fastParams, BatchStrategy.atLeast(3)))
+                .node("batch", new LatchBatchJob(latch, fastParams, BatchStrategy.atLeast(3)))
                 .run(ctx)
 
         then:
@@ -184,7 +184,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("batch", new FastAtLeastNBatchJob(3))
+                .node("batch", new FastAtLeastNBatchJob(3))
                 .run(ctx)
 
         then:
@@ -199,7 +199,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         new JobBuilder<Ctx>()
-                .addNode("batch", new FastAtLeastNBatchJob(5))
+                .node("batch", new FastAtLeastNBatchJob(5))
                 .run(ctx)
 
         then:
@@ -214,7 +214,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("batch", new PartialFailBatchJob(2, [3L, 4L] as Set))
+                .node("batch", new PartialFailBatchJob(2, [3L, 4L] as Set))
                 .run(ctx)
 
         then:
@@ -230,7 +230,7 @@ class BatchStrategySpec extends Specification {
 
         when:
         new JobBuilder<Ctx>()
-                .addNode("batch", new PartialFailBatchJob(2, [1L, 2L] as Set))
+                .node("batch", new PartialFailBatchJob(2, [1L, 2L] as Set))
                 .run(ctx)
 
         then:
@@ -261,8 +261,8 @@ class BatchStrategySpec extends Specification {
 
         when:
         def runner = new JobBuilder<Ctx>()
-                .addNode("fast", new FastAnyBatchJob())
-                .funcNode("downstream", { c -> "done" } as java.util.function.Function)
+                .node("fast", new FastAnyBatchJob())
+                .node("downstream", { c -> "done" } as java.util.function.Function)
                 .depend("fast")
                 .run(ctx)
 

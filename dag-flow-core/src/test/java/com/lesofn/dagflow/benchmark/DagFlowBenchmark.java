@@ -35,7 +35,7 @@ public class DagFlowBenchmark {
             JobBuilder<BenchmarkContext> builder = new JobBuilder<>();
             for (int i = 0; i < nodeCount; i++) {
                 int idx = i;
-                builder.funcNode("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
+                builder.node("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
                     simulateIO(sleepMs);
                     return "io_" + idx;
                 });
@@ -47,7 +47,7 @@ public class DagFlowBenchmark {
             JobBuilder<BenchmarkContext> builder = new JobBuilder<BenchmarkContext>().useVirtualThreads();
             for (int i = 0; i < nodeCount; i++) {
                 int idx = i;
-                builder.funcNode("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
+                builder.node("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
                     simulateIO(sleepMs);
                     return "io_" + idx;
                 });
@@ -71,7 +71,7 @@ public class DagFlowBenchmark {
             JobBuilder<BenchmarkContext> builder = new JobBuilder<>();
             for (int i = 0; i < nodeCount; i++) {
                 int idx = i;
-                builder.funcNode("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
+                builder.node("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
                     simulateIO(sleepMs);
                     return "io_" + idx;
                 });
@@ -83,7 +83,7 @@ public class DagFlowBenchmark {
             JobBuilder<BenchmarkContext> builder = new JobBuilder<BenchmarkContext>().useVirtualThreads();
             for (int i = 0; i < nodeCount; i++) {
                 int idx = i;
-                builder.funcNode("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
+                builder.node("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
                     simulateIO(sleepMs);
                     return "io_" + idx;
                 });
@@ -107,7 +107,7 @@ public class DagFlowBenchmark {
             JobBuilder<BenchmarkContext> builder = new JobBuilder<>();
             for (int i = 0; i < nodeCount; i++) {
                 int idx = i;
-                builder.funcNode("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
+                builder.node("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
                     simulateIO(sleepMs);
                     return "io_" + idx;
                 });
@@ -119,7 +119,7 @@ public class DagFlowBenchmark {
             JobBuilder<BenchmarkContext> builder = new JobBuilder<BenchmarkContext>().useVirtualThreads();
             for (int i = 0; i < nodeCount; i++) {
                 int idx = i;
-                builder.funcNode("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
+                builder.node("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
                     simulateIO(sleepMs);
                     return "io_" + idx;
                 });
@@ -144,7 +144,7 @@ public class DagFlowBenchmark {
             JobBuilder<BenchmarkContext> builder = new JobBuilder<>();
             for (int i = 0; i < nodeCount; i++) {
                 int idx = i;
-                builder.addNode("cpu_" + idx, (CalcCommand<BenchmarkContext, Long>) ctx -> simulateCPU());
+                builder.node("cpu_" + idx, (CalcCommand<BenchmarkContext, Long>) ctx -> simulateCPU());
             }
             builder.run(new BenchmarkContext());
         });
@@ -153,7 +153,7 @@ public class DagFlowBenchmark {
             JobBuilder<BenchmarkContext> builder = new JobBuilder<BenchmarkContext>().useVirtualThreads();
             for (int i = 0; i < nodeCount; i++) {
                 int idx = i;
-                builder.addNode("cpu_" + idx, (CalcCommand<BenchmarkContext, Long>) ctx -> simulateCPU());
+                builder.node("cpu_" + idx, (CalcCommand<BenchmarkContext, Long>) ctx -> simulateCPU());
             }
             builder.run(new BenchmarkContext());
         });
@@ -221,16 +221,16 @@ public class DagFlowBenchmark {
     private JobBuilder<BenchmarkContext> buildMixedDag(JobBuilder<BenchmarkContext> builder) {
         for (int i = 0; i < 5; i++) {
             int idx = i;
-            builder.funcNode("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
+            builder.node("io_" + idx, (Function<BenchmarkContext, Object>) ctx -> {
                 simulateIO(100);
                 return idx;
             });
         }
-        builder.addNode("aggregate", (CalcCommand<BenchmarkContext, Long>) ctx -> simulateCPU());
+        builder.node("aggregate", (CalcCommand<BenchmarkContext, Long>) ctx -> simulateCPU());
         for (int i = 0; i < 5; i++) {
             builder.depend("io_" + i);
         }
-        builder.funcNode("final_io", (Function<BenchmarkContext, Object>) ctx -> {
+        builder.node("final_io", (Function<BenchmarkContext, Object>) ctx -> {
             simulateIO(50);
             return "done";
         }).depend("aggregate");
@@ -242,7 +242,7 @@ public class DagFlowBenchmark {
         for (int layer = 0; layer < layers; layer++) {
             for (int n = 0; n < nodesPerLayer; n++) {
                 String nodeName = "io_" + layer + "_" + n;
-                builder.funcNode(nodeName, (Function<BenchmarkContext, Object>) ctx -> {
+                builder.node(nodeName, (Function<BenchmarkContext, Object>) ctx -> {
                     simulateIO(sleepMs);
                     return nodeName;
                 });

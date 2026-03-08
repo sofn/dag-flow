@@ -27,6 +27,7 @@ import java.util.concurrent.ExecutionException;
 public class JobRunner<C extends DagFlowContext> {
 
     private final Map<String, CompletableFuture<?>> futureMap = new HashMap<>();
+    private final Map<Class<?>, String> classNodeNameMap = new HashMap<>();
 
     JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory) throws ExecutionException, InterruptedException {
         boolean hasCycle = DagNodeCheck.hasCycle(nodeFactory.getNodes());
@@ -44,23 +45,30 @@ public class JobRunner<C extends DagFlowContext> {
                 node.setParentTraceContext(dagContext);
             }
 
-            //配置所有节点依赖关系
+            //Phase 1: 注册所有节点 future，并为有依赖的节点绑定触发链
             for (DagNode<C, ?> node : nodeFactory.getNodes()) {
-                //注册到context
                 futureMap.put(node.getName(), node.getFuture());
+                if (node.getClazz() != null) {
+                    classNodeNameMap.putIfAbsent(node.getClazz(), node.getName());
+                }
 
-                if (CollectionUtils.isEmpty(node.getDepends())) {
-                    log.info("start node direct: " + node.getName());
-                    node.startNode(context);
-                } else {
+                if (!CollectionUtils.isEmpty(node.getDepends())) {
                     CompletableFuture<?>[] depFutures = node.getDepends().stream()
-                            .map(it -> it.startNode(context))
+                            .map(DagNode::getFuture)
                             .toArray(CompletableFuture[]::new);
 
                     CompletableFuture.allOf(depFutures).exceptionally(e -> {
                         node.cancel();
                         return null;
                     }).thenRun(() -> node.startNode(context));
+                }
+            }
+
+            //Phase 2: 启动所有无依赖的根节点
+            for (DagNode<C, ?> node : nodeFactory.getNodes()) {
+                if (CollectionUtils.isEmpty(node.getDepends())) {
+                    log.info("start node direct: " + node.getName());
+                    node.startNode(context);
                 }
             }
             CompletableFuture.allOf(this.futureMap.values().toArray(new CompletableFuture[]{})).get();
@@ -78,11 +86,11 @@ public class JobRunner<C extends DagFlowContext> {
     }
 
     public <T> T getResult(Class<? extends DagFlowCommand<?, T>> clazz) {
-        String nodeName = DagNodeFactory.getClassNodeName(clazz);
-        CompletableFuture<?> future = futureMap.get(nodeName);
-        if (future == null) {
-            throw new DagFlowRunException("Node not registered: " + nodeName);
+        String nodeName = classNodeNameMap.get(clazz);
+        if (nodeName == null) {
+            throw new DagFlowRunException("Node not registered: " + DagNodeFactory.getClassNodeName(clazz));
         }
+        CompletableFuture<?> future = futureMap.get(nodeName);
         return getFutureValue(nodeName, future);
     }
 
@@ -101,11 +109,11 @@ public class JobRunner<C extends DagFlowContext> {
 
     @SuppressWarnings("unchecked")
     public <T> T getResultNow(Class<? extends DagFlowCommand<?, T>> clazz) {
-        String nodeName = DagNodeFactory.getClassNodeName(clazz);
-        CompletableFuture<?> future = futureMap.get(nodeName);
-        if (future == null) {
-            throw new DagFlowRunException("node not register: " + nodeName);
+        String nodeName = classNodeNameMap.get(clazz);
+        if (nodeName == null) {
+            throw new DagFlowRunException("Node not registered: " + DagNodeFactory.getClassNodeName(clazz));
         }
+        CompletableFuture<?> future = futureMap.get(nodeName);
         if (future.isDone()) {
             try {
                 return (T) future.getNow(null);

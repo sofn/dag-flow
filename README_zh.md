@@ -21,8 +21,9 @@
 - **基于 DAG 的并行执行** — 基于 `CompletableFuture`，根据声明的依赖关系自动最大化并行度
 - **多种命令类型** — `SyncCommand`（调用线程）、`AsyncCommand`（I/O 线程池）、`CalcCommand`（CPU 线程池）、`BatchCommand`（扇出，支持 ALL/ANY/AT_LEAST_N 策略）
 - **环路检测** — 执行前基于 DFS 的环路检测，清晰的错误报告
-- **流式构建 API** — 链式调用 `.addNode().depend()`；Builder 可跨多次运行复用
-- **Lambda 支持** — `funcNode()` 接受 `Function<C, R>` 或 `Consumer<C>`，轻量级节点无需建类
+- **流式构建 API** — 链式调用 `.node().depend()`；Builder 可跨多次运行复用
+- **自动命名** — `node(Class)` 自动生成名称（`fetchOrder#0`、`fetchOrder#1`、...）；`node(Function)` 使用 `node#0`、`node#1`、...
+- **Lambda 支持** — `node()` 接受 `Function<C, R>` 或 `Consumer<C>`，轻量级节点无需建类
 - **可扩展架构** — `JobBuilder` 支持继承扩展，方便接入第三方容错框架
 - **Hystrix 集成** — `dag-flow-hystrix` 模块将 Netflix `HystrixCommand` 包装为 DAG 节点
 - **Resilience4j 集成** — `dag-flow-resilience4j` 模块提供熔断器、重试、隔离仓、限流器、超时控制等能力
@@ -102,10 +103,10 @@ OrderContext context = new OrderContext();
 context.setOrderId("12345");
 
 JobRunner<OrderContext> runner = new JobBuilder<OrderContext>()
-        .addNode(FetchOrder.class)
-        .addNode(FetchUser.class)
-        .addNode(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
-        .addNode(BuildResult.class).depend(CalcDiscount.class)
+        .node(FetchOrder.class)
+        .node(FetchUser.class)
+        .node(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
+        .node(BuildResult.class).depend(CalcDiscount.class)
         .run(context);
 
 Result result = runner.getResult(BuildResult.class);
@@ -162,14 +163,34 @@ DagFlowCommand<C, R>                  // 基础接口: R run(C context)
 
 ## 进阶用法
 
+### 自动命名
+
+使用 `node(Class)` 时无需指定名称，dag-flow 自动生成 `className#0`、`className#1`、... 形式的名称：
+
+```java
+new JobBuilder<OrderContext>()
+        .node(FetchOrder.class)       // 自动命名 "fetchOrder#0"
+        .node(FetchOrder.class)       // 自动命名 "fetchOrder#1"
+        .node(CalcDiscount.class)     // 自动命名 "calcDiscount#0"
+        .run(context);
+```
+
+Lambda 节点使用 `node` 前缀：`node#0`、`node#1`、...
+
+也可以显式指定名称：
+
+```java
+builder.node("myCustomName", FetchOrder.class);
+```
+
 ### Lambda 节点
 
 轻量级逻辑无需创建类：
 
 ```java
 new JobBuilder<OrderContext>()
-        .addNode(FetchOrder.class)
-        .funcNode("format", (Function<OrderContext, String>) ctx -> {
+        .node(FetchOrder.class)
+        .node("format", (Function<OrderContext, String>) ctx -> {
             Order order = ctx.getResult(FetchOrder.class);
             return order.toString();
         }).depend(FetchOrder.class)
@@ -244,7 +265,7 @@ public class CalcDiscount implements CalcCommand<OrderContext, BigDecimal> {
 
 // Builder 中无需调用 .depend()
 new JobBuilder<OrderContext>()
-        .addNode(CalcDiscount.class)   // 自动解析对 FetchOrder 的依赖
+        .node(CalcDiscount.class)      // 自动解析对 FetchOrder 的依赖
         .run(context);
 ```
 
@@ -281,7 +302,7 @@ Resilience4jCommand<MyContext, String> command =
 
 JobRunner<MyContext> runner = new Resilience4jJobBuilder<MyContext>()
         .addResilience4jNode("protectedCall", command)
-        .addNode(DownstreamJob.class).depend("protectedCall")
+        .node(DownstreamJob.class).depend("protectedCall")
         .run(context);
 ```
 
@@ -313,7 +334,7 @@ public class OrderService implements AsyncCommand<OrderContext, Order> {
 
 // 在 DAG 构建中通过名称引用 Spring Bean
 new JobBuilder<OrderContext>()
-        .addNode(CalcDiscount.class)
+        .node(CalcDiscount.class)
         .dependSpringBean("orderService")   // 从 Spring ApplicationContext 中解析
         .run(context);
 ```
@@ -332,9 +353,9 @@ dagflow.enabled=false
 ```java
 JobRunner<MyContext> runner = new JobBuilder<MyContext>()
         .useVirtualThreads()                   // 启用虚拟线程
-        .addNode(FetchOrder.class)             // AsyncCommand → 虚拟线程
-        .addNode(FetchUser.class)              // AsyncCommand → 虚拟线程
-        .addNode(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
+        .node(FetchOrder.class)                // AsyncCommand → 虚拟线程
+        .node(FetchUser.class)                 // AsyncCommand → 虚拟线程
+        .node(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
         .run(context);
 ```
 
@@ -361,8 +382,8 @@ DagFlowTracing.setOpenTelemetry(myOpenTelemetrySdk);
 
 // 正常运行 DAG — Span 自动创建
 new JobBuilder<MyContext>()
-        .addNode(FetchOrder.class)
-        .addNode(CalcDiscount.class).depend(FetchOrder.class)
+        .node(FetchOrder.class)
+        .node(CalcDiscount.class).depend(FetchOrder.class)
         .run(context);
 
 // 重置为 GlobalOpenTelemetry
@@ -391,7 +412,7 @@ public class CustomJob implements AsyncCommand<MyContext, String> {
 }
 
 // 或为 Lambda 节点传入线程池
-builder.funcNode("custom", myFunction, myExecutor);
+builder.node("custom", myFunction, myExecutor);
 ```
 
 ## 项目结构

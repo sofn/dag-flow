@@ -83,7 +83,7 @@ class HystrixDagSpec extends Specification {
         when:
         def runner = new HystrixJobBuilder<HystrixContext>()
                 .addHystrixNode(OriginHystrixJob.class)
-                .funcNode("downstream", { c -> "downstream_" + c.getResult("originHystrixJob") } as Function)
+                .node("downstream", { c -> "downstream_" + c.getResult("originHystrixJob") } as Function)
                 .depend("originHystrixJob")
                 .run(request)
 

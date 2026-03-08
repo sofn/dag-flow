@@ -33,7 +33,7 @@ public class HystrixJobBuilder<C extends DagFlowContext> extends JobBuilder<C> {
         try {
             HystrixCommand<?> instance = commandClass.getConstructor().newInstance();
             HystrixCommandWrapper<C, ?> wrapper = new HystrixCommandWrapper<>(instance);
-            this.addNode(nodeName, wrapper);
+            this.node(nodeName, wrapper);
             //解析类中定义的依赖
             if (instance instanceof DagFlowDepend) {
                 currentNode.addDepends(nodeFactory.parseDepends((DagFlowDepend<C>) instance));
@@ -63,7 +63,7 @@ public class HystrixJobBuilder<C extends DagFlowContext> extends JobBuilder<C> {
      */
     public HystrixJobBuilder<C> addHystrixNode(String nodeName, HystrixCommand<?> command) {
         HystrixCommandWrapper<C, ?> wrapper = new HystrixCommandWrapper<>(command);
-        this.addNode(nodeName, wrapper);
+        this.node(nodeName, wrapper);
         //解析类中定义的依赖
         if (command instanceof DagFlowDepend) {
             currentNode.addDepends(nodeFactory.parseDepends((DagFlowDepend<C>) command));

@@ -43,8 +43,8 @@ class TracingSpec extends Specification {
     def "DAG run creates root span and node spans"() {
         when:
         new JobBuilder<TraceContext>()
-                .funcNode("nodeA", { c -> "a" } as Function)
-                .funcNode("nodeB", { c -> "b" } as Function)
+                .node("nodeA", { c -> "a" } as Function)
+                .node("nodeB", { c -> "b" } as Function)
                 .run(new TraceContext())
 
         then:
@@ -62,7 +62,7 @@ class TracingSpec extends Specification {
     def "node spans have correct attributes"() {
         when:
         new JobBuilder<TraceContext>()
-                .funcNode("myFunc", { c -> "result" } as Function)
+                .node("myFunc", { c -> "result" } as Function)
                 .run(new TraceContext())
 
         then:
@@ -77,7 +77,7 @@ class TracingSpec extends Specification {
     def "successful execution sets span status OK"() {
         when:
         new JobBuilder<TraceContext>()
-                .funcNode("ok", { c -> "ok" } as Function)
+                .node("ok", { c -> "ok" } as Function)
                 .run(new TraceContext())
 
         then:
@@ -92,7 +92,7 @@ class TracingSpec extends Specification {
     def "failed node sets span status ERROR and records exception"() {
         when:
         new JobBuilder<TraceContext>()
-                .funcNode("fail", { c -> throw new RuntimeException("test error") } as Function)
+                .node("fail", { c -> throw new RuntimeException("test error") } as Function)
                 .run(new TraceContext())
 
         then:
@@ -110,9 +110,9 @@ class TracingSpec extends Specification {
     def "parallel nodes create separate spans"() {
         when:
         new JobBuilder<TraceContext>()
-                .funcNode("a", { c -> "a" } as Function)
-                .funcNode("b", { c -> "b" } as Function)
-                .funcNode("c", { c -> "c" } as Function)
+                .node("a", { c -> "a" } as Function)
+                .node("b", { c -> "b" } as Function)
+                .node("c", { c -> "c" } as Function)
                 .run(new TraceContext())
 
         then:
@@ -128,9 +128,9 @@ class TracingSpec extends Specification {
     def "dependency chain spans are children of dag span"() {
         when:
         new JobBuilder<TraceContext>()
-                .funcNode("step1", { c -> "s1" } as Function)
-                .funcNode("step2", { c -> "s2" } as Function).depend("step1")
-                .funcNode("step3", { c -> "s3" } as Function).depend("step2")
+                .node("step1", { c -> "s1" } as Function)
+                .node("step2", { c -> "s2" } as Function).depend("step1")
+                .node("step3", { c -> "s3" } as Function).depend("step2")
                 .run(new TraceContext())
 
         then:
@@ -152,7 +152,7 @@ class TracingSpec extends Specification {
 
         when:
         new JobBuilder<Test2Context>()
-                .addNode(BatchJob1.class)
+                .node(BatchJob1.class)
                 .run(request)
 
         then:
@@ -171,8 +171,8 @@ class TracingSpec extends Specification {
         when:
         new JobBuilder<TraceContext>()
                 .useVirtualThreads()
-                .funcNode("vt1", { c -> Thread.sleep(10); "vt1" } as Function)
-                .funcNode("vt2", { c -> Thread.sleep(10); "vt2" } as Function)
+                .node("vt1", { c -> Thread.sleep(10); "vt1" } as Function)
+                .node("vt2", { c -> Thread.sleep(10); "vt2" } as Function)
                 .run(new TraceContext())
 
         then:
@@ -187,7 +187,7 @@ class TracingSpec extends Specification {
     def "dag span status is ERROR when execution fails"() {
         when:
         new JobBuilder<TraceContext>()
-                .funcNode("boom", { c -> throw new RuntimeException("boom") } as Function)
+                .node("boom", { c -> throw new RuntimeException("boom") } as Function)
                 .run(new TraceContext())
 
         then:
@@ -207,7 +207,7 @@ class TracingSpec extends Specification {
 
         when:
         def runner = new JobBuilder<TraceContext>()
-                .funcNode("noop", { c -> "noop" } as Function)
+                .node("noop", { c -> "noop" } as Function)
                 .run(new TraceContext())
 
         then:

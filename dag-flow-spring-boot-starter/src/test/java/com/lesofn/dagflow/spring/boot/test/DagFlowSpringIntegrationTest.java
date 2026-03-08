@@ -45,7 +45,7 @@ class DagFlowSpringIntegrationTest {
         context.setName("test");
 
         JobRunner<TestSpringContext> runner = new JobBuilder<TestSpringContext>()
-                .addNode(SpringJob1.class)
+                .node(SpringJob1.class)
                 .dependSpringBean("springJob2")
                 .run(context);
 
@@ -59,7 +59,7 @@ class DagFlowSpringIntegrationTest {
         context.setName("hello");
 
         JobRunner<TestSpringContext> runner = new JobBuilder<TestSpringContext>()
-                .funcNode("start", (java.util.function.Function<TestSpringContext, String>) c -> "started")
+                .node("start", (java.util.function.Function<TestSpringContext, String>) c -> "started")
                 .dependSpringBean("springJob1")
                 .run(context);
 
@@ -73,8 +73,8 @@ class DagFlowSpringIntegrationTest {
         context.setName("mix");
 
         JobRunner<TestSpringContext> runner = new JobBuilder<TestSpringContext>()
-                .addNode(SpringJob1.class)
-                .funcNode("transform", (java.util.function.Function<TestSpringContext, String>) c -> {
+                .node(SpringJob1.class)
+                .node("transform", (java.util.function.Function<TestSpringContext, String>) c -> {
                     String r = c.getResult(SpringJob1.class);
                     return "transformed_" + r;
                 })

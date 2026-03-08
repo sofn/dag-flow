@@ -31,56 +31,109 @@ public class JobBuilder<C extends DagFlowContext> {
      */
     protected Executor executorOverride;
 
+    // ======================== Class-based node registration ========================
+
     /**
-     * @param commandClass 要执行的job
+     * Register a node by command class with auto-generated name (className#0, #1, …).
      */
-    public JobBuilder<C> addNode(Class<? extends DagFlowCommand<C, ?>> commandClass) {
-        currentNode = nodeFactory.createByClass(commandClass);
+    public JobBuilder<C> node(Class<? extends DagFlowCommand<C, ?>> commandClass) {
+        currentNode = nodeFactory.createByClassAutoName(commandClass);
         //解析类中定义的依赖
         currentNode.addDepends(nodeFactory.parseDepends(currentNode.getInstance()));
         return this;
     }
 
     /**
-     * @param commandClass 要执行的job
+     * Register a node by command class with explicit name.
      */
-    public JobBuilder<C> addNode(String nodeName, Class<? extends DagFlowCommand<C, ?>> commandClass) {
+    public JobBuilder<C> node(String nodeName, Class<? extends DagFlowCommand<C, ?>> commandClass) {
         currentNode = nodeFactory.createByClass(nodeName, commandClass);
         //解析类中定义的依赖
         currentNode.addDepends(nodeFactory.parseDepends(currentNode.getInstance()));
         return this;
     }
 
-    public JobBuilder<C> addNode(String nodeName, DagFlowCommand<C, ?> command) {
+    // ======================== Instance-based node registration ========================
+
+    /**
+     * Register a node by command instance with explicit name.
+     */
+    public JobBuilder<C> node(String nodeName, DagFlowCommand<C, ?> command) {
         currentNode = nodeFactory.createByInstance(nodeName, command);
         //解析类中定义的依赖
         currentNode.addDepends(nodeFactory.parseDepends(currentNode.getInstance()));
         return this;
     }
 
-    public JobBuilder<C> funcNode(String nodeName, Function<C, ?> function) {
-        this.funcNode(nodeName, function, null);
-        return this;
+    // ======================== Function-based node registration ========================
+
+    /**
+     * Register a Function node with auto-generated name (node#0, node#1, …).
+     */
+    public JobBuilder<C> node(Function<C, ?> function) {
+        return this.node(function, (Executor) null);
     }
 
-    public JobBuilder<C> funcNode(String nodeName, Function<C, ?> function, Executor executor) {
+    /**
+     * Register a Function node with auto-generated name and custom executor.
+     */
+    public JobBuilder<C> node(Function<C, ?> function, Executor executor) {
+        String nodeName = nodeFactory.generateFuncNodeName();
+        return this.node(nodeName, function, executor);
+    }
+
+    /**
+     * Register a Function node with explicit name.
+     */
+    public JobBuilder<C> node(String nodeName, Function<C, ?> function) {
+        return this.node(nodeName, function, null);
+    }
+
+    /**
+     * Register a Function node with explicit name and custom executor.
+     */
+    public JobBuilder<C> node(String nodeName, Function<C, ?> function, Executor executor) {
         FunctionCommand<C, ?> command = new FunctionCommand<>(function, executor);
         currentNode = nodeFactory.createByNameFunction(nodeName, command);
         currentNode.addDepends(nodeFactory.parseDepends(currentNode.getInstance()));
         return this;
     }
 
-    public JobBuilder<C> funcNode(String nodeName, Consumer<C> consumer) {
-        this.funcNode(nodeName, consumer, null);
-        return this;
+    // ======================== Consumer-based node registration ========================
+
+    /**
+     * Register a Consumer node with auto-generated name (node#0, node#1, …).
+     */
+    public JobBuilder<C> node(Consumer<C> consumer) {
+        return this.node(consumer, (Executor) null);
     }
 
-    public JobBuilder<C> funcNode(String nodeName, Consumer<C> consumer, Executor executor) {
+    /**
+     * Register a Consumer node with auto-generated name and custom executor.
+     */
+    public JobBuilder<C> node(Consumer<C> consumer, Executor executor) {
+        String nodeName = nodeFactory.generateFuncNodeName();
+        return this.node(nodeName, consumer, executor);
+    }
+
+    /**
+     * Register a Consumer node with explicit name.
+     */
+    public JobBuilder<C> node(String nodeName, Consumer<C> consumer) {
+        return this.node(nodeName, consumer, null);
+    }
+
+    /**
+     * Register a Consumer node with explicit name and custom executor.
+     */
+    public JobBuilder<C> node(String nodeName, Consumer<C> consumer, Executor executor) {
         ConsumerCommand<C, ?> command = new ConsumerCommand<>(consumer, executor);
         currentNode = nodeFactory.createByNameConsumer(nodeName, command);
         currentNode.addDepends(nodeFactory.parseDepends(currentNode.getInstance()));
         return this;
     }
+
+    // ======================== Dependency declaration ========================
 
     @SafeVarargs
     public final JobBuilder<C> depend(Class<? extends DagFlowCommand<C, ?>>... depends) {
@@ -88,7 +141,7 @@ public class JobBuilder<C extends DagFlowContext> {
             throw new DagFlowBuildException("please add node");
         }
         //解析Builder中定义的依赖
-        this.currentNode.addDepends(Arrays.stream(depends).map(nodeFactory::createByClass).collect(Collectors.toList()));
+        this.currentNode.addDepends(Arrays.stream(depends).map(nodeFactory::findOrCreateByClass).collect(Collectors.toList()));
         return this;
     }
 
@@ -110,6 +163,8 @@ public class JobBuilder<C extends DagFlowContext> {
         return this;
     }
 
+    // ======================== Configuration ========================
+
     /**
      * 启用虚拟线程执行器 (Java 21+)，所有非 SyncCommand 节点将在虚拟线程上执行
      */
@@ -127,6 +182,5 @@ public class JobBuilder<C extends DagFlowContext> {
         });
         return runner.run(context, this.nodeFactory);
     }
-
 
 }

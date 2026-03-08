@@ -22,7 +22,7 @@ class VirtualThreadSpec extends Specification {
         when:
         def runner = new JobBuilder<Test1Context>()
                 .useVirtualThreads()
-                .funcNode("vt_async", { c ->
+                .node("vt_async", { c ->
                     threadInfo.put("isVirtual", Thread.currentThread().isVirtual())
                     return "async_result"
                 } as Function)
@@ -44,7 +44,7 @@ class VirtualThreadSpec extends Specification {
         when:
         def runner = new JobBuilder<Test1Context>()
                 .useVirtualThreads()
-                .addNode("syncNode", new SyncCommand<Test1Context, String>() {
+                .node("syncNode", new SyncCommand<Test1Context, String>() {
                     @Override
                     String run(Test1Context context) {
                         threadInfo.put("execThread", Thread.currentThread())
@@ -69,7 +69,7 @@ class VirtualThreadSpec extends Specification {
 
         when:
         def runner = new JobBuilder<Test1Context>()
-                .funcNode("pt_async", { c ->
+                .node("pt_async", { c ->
                     threadInfo.put("isVirtual", Thread.currentThread().isVirtual())
                     return "result"
                 } as Function)
@@ -89,8 +89,8 @@ class VirtualThreadSpec extends Specification {
         when:
         def runner = new JobBuilder<Test1Context>()
                 .useVirtualThreads()
-                .addNode(Job2.class).depend(Job1.class)
-                .addNode(Job3.class).depend(Job2.class)
+                .node(Job2.class).depend(Job1.class)
+                .node(Job3.class).depend(Job2.class)
                 .run(request)
 
         then:
@@ -110,13 +110,13 @@ class VirtualThreadSpec extends Specification {
         when:
         def runner = new JobBuilder<Test1Context>()
                 .useVirtualThreads()
-                .funcNode("a", { c ->
+                .node("a", { c ->
                     threadIds.put("a", Thread.currentThread().threadId())
                     virtualFlags.put("a", Thread.currentThread().isVirtual())
                     Thread.sleep(50)
                     return "a"
                 } as Function)
-                .funcNode("b", { c ->
+                .node("b", { c ->
                     threadIds.put("b", Thread.currentThread().threadId())
                     virtualFlags.put("b", Thread.currentThread().isVirtual())
                     Thread.sleep(50)
@@ -141,7 +141,7 @@ class VirtualThreadSpec extends Specification {
         request.setName("hello")
         def builder = new JobBuilder<Test1Context>()
                 .useVirtualThreads()
-        builder.funcNode("node", { c ->
+        builder.node("node", { c ->
             return Thread.currentThread().isVirtual()
         } as Function)
 
@@ -162,7 +162,7 @@ class VirtualThreadSpec extends Specification {
 
         when:
         def runner = new JobBuilder<Test1Context>()
-                .addNode(Job2.class).depend(Job1.class)
+                .node(Job2.class).depend(Job1.class)
                 .run(request)
 
         then:
@@ -180,15 +180,15 @@ class VirtualThreadSpec extends Specification {
         when:
         def runner = new JobBuilder<Test1Context>()
                 .useVirtualThreads()
-                .addNode(Job1.class)
-                .addNode("syncJob", new SyncCommand<Test1Context, String>() {
+                .node(Job1.class)
+                .node("syncJob", new SyncCommand<Test1Context, String>() {
                     @Override
                     String run(Test1Context context) {
                         threadInfo.put("sync", Thread.currentThread().isVirtual())
                         return "sync"
                     }
                 })
-                .funcNode("asyncJob", { c ->
+                .node("asyncJob", { c ->
                     threadInfo.put("async", Thread.currentThread().isVirtual())
                     return "async"
                 } as Function)

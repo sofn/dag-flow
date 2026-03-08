@@ -19,7 +19,7 @@ class ErrorHandlingSpec extends Specification {
         def request = new Test1Context()
         request.setName("hello")
         def builder = new JobBuilder<Test1Context>()
-        builder.addNode(ErrorTestJob1.class).depend(JobError1.class)
+        builder.node(ErrorTestJob1.class).depend(JobError1.class)
 
         when:
         builder.run(request)
@@ -35,7 +35,7 @@ class ErrorHandlingSpec extends Specification {
         def request = new Test1Context()
         request.setName("hello")
         def builder = new JobBuilder<Test1Context>()
-        builder.addNode(JobError1.class)
+        builder.node(JobError1.class)
 
         when:
         builder.run(request)

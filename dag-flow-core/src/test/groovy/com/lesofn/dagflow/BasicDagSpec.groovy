@@ -20,8 +20,8 @@ class BasicDagSpec extends Specification {
 
         when:
         def runner = new JobBuilder<Test1Context>()
-                .addNode(Job2.class).depend(Job1.class)
-                .addNode(Job3.class).depend(Job2.class)
+                .node(Job2.class).depend(Job1.class)
+                .node(Job3.class).depend(Job2.class)
                 .run(request)
 
         then:
@@ -39,7 +39,7 @@ class BasicDagSpec extends Specification {
 
         when:
         def runner = new JobBuilder<Test1Context>()
-                .addNode(Job4.class)
+                .node(Job4.class)
                 .run(request)
 
         then:
@@ -54,7 +54,7 @@ class BasicDagSpec extends Specification {
         def request = new Test1Context()
         request.setName("hello")
         def builder = new JobBuilder<Test1Context>()
-        builder.funcNode("node4", { c -> "hello_func" } as Function).depend(Job1.class)
+        builder.node("node4", { c -> "hello_func" } as Function).depend(Job1.class)
 
         when:
         def runner = builder.run(request)
@@ -70,7 +70,7 @@ class BasicDagSpec extends Specification {
         def request = new Test1Context()
         request.setName("hello")
         def builder = new JobBuilder<Test1Context>()
-        builder.funcNode("consumer", { c -> } as Consumer).depend(Job1.class)
+        builder.node("consumer", { c -> } as Consumer).depend(Job1.class)
 
         when:
         builder.run(request)
@@ -86,7 +86,7 @@ class BasicDagSpec extends Specification {
         def request = new Test1Context()
         request.setName("hello")
         def builder = new JobBuilder<Test1Context>()
-        builder.funcNode("func", { c -> "result" } as Function).depend(Job1.class)
+        builder.node("func", { c -> "result" } as Function).depend(Job1.class)
 
         when:
         def run1 = builder.run(request)

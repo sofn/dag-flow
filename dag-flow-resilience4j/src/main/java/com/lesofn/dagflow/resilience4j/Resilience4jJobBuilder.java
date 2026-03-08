@@ -17,7 +17,7 @@ public class Resilience4jJobBuilder<C extends DagFlowContext> extends JobBuilder
      * @param command  Resilience4j命令
      */
     public Resilience4jJobBuilder<C> addResilience4jNode(String nodeName, Resilience4jCommand<C, ?> command) {
-        this.addNode(nodeName, command);
+        this.node(nodeName, command);
         return this;
     }
 }

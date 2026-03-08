@@ -21,8 +21,9 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 - **DAG-based parallel execution** — Automatically maximizes parallelism based on declared dependencies using `CompletableFuture`
 - **Multiple command types** — `SyncCommand` (caller thread), `AsyncCommand` (I/O pool), `CalcCommand` (CPU pool), `BatchCommand` (fan-out with ALL/ANY/AT_LEAST_N strategies)
 - **Cycle detection** — DFS-based cycle detection before execution with clear error reporting
-- **Fluent builder API** — Chain `.addNode().depend()` calls; builder is reusable across runs
-- **Lambda support** — `funcNode()` accepts `Function<C, R>` or `Consumer<C>` for lightweight nodes
+- **Fluent builder API** — Chain `.node().depend()` calls; builder is reusable across runs
+- **Auto-naming** — `node(Class)` auto-generates names (`fetchOrder#0`, `fetchOrder#1`, ...); `node(Function)` uses `node#0`, `node#1`, ...
+- **Lambda support** — `node()` accepts `Function<C, R>` or `Consumer<C>` for lightweight nodes
 - **Extensible architecture** — `JobBuilder` is designed for extension; create custom builders for third-party integrations
 - **Hystrix integration** — `dag-flow-hystrix` module wraps Netflix `HystrixCommand` into the DAG
 - **Resilience4j integration** — `dag-flow-resilience4j` module provides CircuitBreaker, Retry, Bulkhead, RateLimiter, TimeLimiter support
@@ -102,10 +103,10 @@ OrderContext context = new OrderContext();
 context.setOrderId("12345");
 
 JobRunner<OrderContext> runner = new JobBuilder<OrderContext>()
-        .addNode(FetchOrder.class)
-        .addNode(FetchUser.class)
-        .addNode(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
-        .addNode(BuildResult.class).depend(CalcDiscount.class)
+        .node(FetchOrder.class)
+        .node(FetchUser.class)
+        .node(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
+        .node(BuildResult.class).depend(CalcDiscount.class)
         .run(context);
 
 Result result = runner.getResult(BuildResult.class);
@@ -162,14 +163,34 @@ Both pools use `CallerRunsPolicy` as the rejection handler.
 
 ## Advanced Usage
 
+### Auto-Naming
+
+When you use `node(Class)` without an explicit name, dag-flow auto-generates a name using the pattern `className#0`, `className#1`, etc.:
+
+```java
+new JobBuilder<OrderContext>()
+        .node(FetchOrder.class)       // auto-named "fetchOrder#0"
+        .node(FetchOrder.class)       // auto-named "fetchOrder#1"
+        .node(CalcDiscount.class)     // auto-named "calcDiscount#0"
+        .run(context);
+```
+
+Lambda nodes use the prefix `node`: `node#0`, `node#1`, ...
+
+You can also provide an explicit name:
+
+```java
+builder.node("myCustomName", FetchOrder.class);
+```
+
 ### Lambda Nodes
 
 For lightweight logic, skip creating a class:
 
 ```java
 new JobBuilder<OrderContext>()
-        .addNode(FetchOrder.class)
-        .funcNode("format", (Function<OrderContext, String>) ctx -> {
+        .node(FetchOrder.class)
+        .node("format", (Function<OrderContext, String>) ctx -> {
             Order order = ctx.getResult(FetchOrder.class);
             return order.toString();
         }).depend(FetchOrder.class)
@@ -244,7 +265,7 @@ public class CalcDiscount implements CalcCommand<OrderContext, BigDecimal> {
 
 // No need to call .depend() in the builder
 new JobBuilder<OrderContext>()
-        .addNode(CalcDiscount.class)   // auto-resolves dependency on FetchOrder
+        .node(CalcDiscount.class)      // auto-resolves dependency on FetchOrder
         .run(context);
 ```
 
@@ -281,7 +302,7 @@ Resilience4jCommand<MyContext, String> command =
 
 JobRunner<MyContext> runner = new Resilience4jJobBuilder<MyContext>()
         .addResilience4jNode("protectedCall", command)
-        .addNode(DownstreamJob.class).depend("protectedCall")
+        .node(DownstreamJob.class).depend("protectedCall")
         .run(context);
 ```
 
@@ -313,7 +334,7 @@ public class OrderService implements AsyncCommand<OrderContext, Order> {
 
 // Reference Spring beans by name in DAG construction
 new JobBuilder<OrderContext>()
-        .addNode(CalcDiscount.class)
+        .node(CalcDiscount.class)
         .dependSpringBean("orderService")   // resolved from Spring ApplicationContext
         .run(context);
 ```
@@ -332,9 +353,9 @@ Enable virtual threads for all non-sync nodes with a single call:
 ```java
 JobRunner<MyContext> runner = new JobBuilder<MyContext>()
         .useVirtualThreads()                   // enable virtual threads
-        .addNode(FetchOrder.class)             // AsyncCommand → virtual thread
-        .addNode(FetchUser.class)              // AsyncCommand → virtual thread
-        .addNode(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
+        .node(FetchOrder.class)                // AsyncCommand → virtual thread
+        .node(FetchUser.class)                 // AsyncCommand → virtual thread
+        .node(CalcDiscount.class).depend(FetchOrder.class, FetchUser.class)
         .run(context);
 ```
 
@@ -361,8 +382,8 @@ DagFlowTracing.setOpenTelemetry(myOpenTelemetrySdk);
 
 // Then run the DAG as normal — spans are created automatically
 new JobBuilder<MyContext>()
-        .addNode(FetchOrder.class)
-        .addNode(CalcDiscount.class).depend(FetchOrder.class)
+        .node(FetchOrder.class)
+        .node(CalcDiscount.class).depend(FetchOrder.class)
         .run(context);
 
 // Reset to GlobalOpenTelemetry
@@ -391,7 +412,7 @@ public class CustomJob implements AsyncCommand<MyContext, String> {
 }
 
 // Or pass executor to lambda nodes
-builder.funcNode("custom", myFunction, myExecutor);
+builder.node("custom", myFunction, myExecutor);
 ```
 
 ## Project Structure

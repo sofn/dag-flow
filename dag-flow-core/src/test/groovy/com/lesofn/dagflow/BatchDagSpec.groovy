@@ -21,8 +21,8 @@ class BatchDagSpec extends Specification {
 
         when:
         def runner = new JobBuilder<Test2Context>()
-                .addNode(BatchJob1.class)
-                .addNode(CommonJob1.class).depend(BatchJob1.class)
+                .node(BatchJob1.class)
+                .node(CommonJob1.class).depend(BatchJob1.class)
                 .run(request)
 
         then:
@@ -42,8 +42,8 @@ class BatchDagSpec extends Specification {
 
         when:
         new JobBuilder<Test2Context>()
-                .addNode(BatchExceptionJob2.class)
-                .addNode(CommonJob1.class).depend(BatchExceptionJob2.class)
+                .node(BatchExceptionJob2.class)
+                .node(CommonJob1.class).depend(BatchExceptionJob2.class)
                 .run(request)
 
         then:

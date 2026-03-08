@@ -25,10 +25,28 @@ public class DagNodeFactory<C extends DagFlowContext> {
      */
     private static final Map<Class<?>, Constructor<?>> CLASS_CONSTRUCTOR_MAP = new HashMap<>();
 
+    private static final String FUNC_NODE_PREFIX = "node";
+
     /**
      * 注册的节点
      */
-    private final Map<String, DagNode<C, ?>> nodeNameMap = new HashMap<>();
+    private final Map<String, DagNode<C, ?>> nodeNameMap = new LinkedHashMap<>();
+
+    /**
+     * class → first registered node (for class-based lookup by depend / getResult)
+     */
+    private final Map<Class<?>, DagNode<C, ?>> firstClassNodeMap = new LinkedHashMap<>();
+
+    /**
+     * Auto-name counters per prefix (e.g. "fetchOrder" → 0, 1, 2…)
+     */
+    private final Map<String, Integer> autoNameCounters = new HashMap<>();
+
+    /**
+     * Tracks classes that have been explicitly registered via node(Class).
+     * Used to adopt auto-created nodes on first explicit registration.
+     */
+    private final Set<Class<?>> explicitlyRegistered = new HashSet<>();
 
     /**
      * class转node name，首字符小写，跟Spring bean逻辑一致
@@ -40,9 +58,94 @@ public class DagNodeFactory<C extends DagFlowContext> {
         return StringUtils.uncapitalize(clazz.getSimpleName());
     }
 
-    public <T extends DagFlowCommand<C, ?>> DagNode<C, T> createByClass(Class<T> clazz) {
-        String nodeName = DagNodeFactory.getClassNodeName(clazz);
-        return this.createByClass(nodeName, clazz);
+    /**
+     * Generate auto-incremented name: prefix#0, prefix#1, …
+     */
+    public String generateAutoName(String prefix) {
+        int count = autoNameCounters.getOrDefault(prefix, 0);
+        autoNameCounters.put(prefix, count + 1);
+        return prefix + "#" + count;
+    }
+
+    /**
+     * Generate auto-name for functional (lambda) nodes: node#0, node#1, …
+     */
+    public String generateFuncNodeName() {
+        return generateAutoName(FUNC_NODE_PREFIX);
+    }
+
+    /**
+     * Registration with auto-generated name. Used by node(Class).
+     * <p>
+     * On the first explicit call for a class, if that class was already auto-created
+     * by depend/parseDepends, the existing node is adopted (returned as-is).
+     * Subsequent calls always create new nodes with incrementing suffixes.
+     */
+    @SuppressWarnings("unchecked")
+    public <T extends DagFlowCommand<C, ?>> DagNode<C, T> createByClassAutoName(Class<T> clazz) {
+        // Adopt existing auto-created node on first explicit registration
+        if (!explicitlyRegistered.contains(clazz) && firstClassNodeMap.containsKey(clazz)) {
+            explicitlyRegistered.add(clazz);
+            return (DagNode<C, T>) firstClassNodeMap.get(clazz);
+        }
+        explicitlyRegistered.add(clazz);
+
+        String prefix = getClassNodeName(clazz);
+        String nodeName = generateAutoName(prefix);
+        try {
+            DagNode<C, T> node = new DagNode<>(nodeName, clazz);
+            //初始化类
+            Constructor<?> constructor = CLASS_CONSTRUCTOR_MAP.computeIfAbsent(clazz, Unchecked.function(Class::getConstructor));
+            T instance = (T) constructor.newInstance();
+            node.setInstance(instance);
+            nodeNameMap.put(nodeName, node);
+            firstClassNodeMap.putIfAbsent(clazz, node);
+            return node;
+        } catch (Exception e) {
+            throw new ConstructorException("please support no argument constructor", e);
+        }
+    }
+
+    /**
+     * Reference lookup by class. Used by depend(Class) and parseDepends.
+     * Finds existing node for the class, or auto-creates one if not found.
+     * Does NOT mark the class as explicitly registered (so node(Class) can adopt later).
+     */
+    @SuppressWarnings("unchecked")
+    public <T extends DagFlowCommand<C, ?>> DagNode<C, T> findOrCreateByClass(Class<T> clazz) {
+        if (firstClassNodeMap.containsKey(clazz)) {
+            return (DagNode<C, T>) firstClassNodeMap.get(clazz);
+        }
+        return createByClassInternal(clazz);
+    }
+
+    /**
+     * Internal creation without marking as explicitly registered.
+     * Used by findOrCreateByClass for auto-created dependency nodes.
+     */
+    @SuppressWarnings("unchecked")
+    private <T extends DagFlowCommand<C, ?>> DagNode<C, T> createByClassInternal(Class<T> clazz) {
+        String prefix = getClassNodeName(clazz);
+        String nodeName = generateAutoName(prefix);
+        try {
+            DagNode<C, T> node = new DagNode<>(nodeName, clazz);
+            Constructor<?> constructor = CLASS_CONSTRUCTOR_MAP.computeIfAbsent(clazz, Unchecked.function(Class::getConstructor));
+            T instance = (T) constructor.newInstance();
+            node.setInstance(instance);
+            nodeNameMap.put(nodeName, node);
+            firstClassNodeMap.putIfAbsent(clazz, node);
+            return node;
+        } catch (Exception e) {
+            throw new ConstructorException("please support no argument constructor", e);
+        }
+    }
+
+    /**
+     * Find node by class (lookup only, no creation). Returns null if not found.
+     */
+    @SuppressWarnings("unchecked")
+    public <T extends DagFlowCommand<C, ?>> DagNode<C, T> findByClass(Class<T> clazz) {
+        return (DagNode<C, T>) firstClassNodeMap.get(clazz);
     }
 
     /**
@@ -65,6 +168,7 @@ public class DagNodeFactory<C extends DagFlowContext> {
             T instance = (T) constructor.newInstance();
             node.setInstance(instance);
             nodeNameMap.put(nodeName, node);
+            firstClassNodeMap.putIfAbsent(clazz, node);
             return node;
         } catch (Exception e) {
             throw new ConstructorException("please support no argument constructor", e);
@@ -93,6 +197,7 @@ public class DagNodeFactory<C extends DagFlowContext> {
         }
         DagNode<C, T> node = new DagNode<>(nodeName, command);
         nodeNameMap.put(nodeName, node);
+        firstClassNodeMap.putIfAbsent(command.getClass(), node);
         return node;
     }
 
@@ -131,10 +236,10 @@ public class DagNodeFactory<C extends DagFlowContext> {
         //根据class获取
         Class<? extends DagFlowCommand<C, ?>> dependNode = instance.dependNode();
         if (dependNode != null) {
-            result.add(this.createByClass(dependNode));
+            result.add(this.findOrCreateByClass(dependNode));
         }
         CollectionUtils.emptyIfNull(instance.dependNodeList())
-                .forEach(it -> result.add(this.createByClass(it)));
+                .forEach(it -> result.add(this.findOrCreateByClass(it)));
 
         //根据name获取
         String nodeName = instance.dependNodeName();
