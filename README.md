@@ -32,6 +32,10 @@ Simplify multi-threaded task orchestration — declare dependencies, and the fra
 - **Smart thread pools** — I/O pool (2x–8x cores) and CPU pool (cores+1) with `CallerRunsPolicy`
 - **OpenTelemetry tracing** — Built-in distributed tracing via `opentelemetry-api`; creates root span per DAG run, child spans per node, and batch-item spans — no-op when SDK is absent
 - **Replay profiling** — `enableReplay()` records per-node start/end timing; print text-based Gantt charts and waterfall timelines; Spring Boot web UI at `/dagflow/replay` with configurable LRU cache
+- **Node timeout** — Per-node and DAG-level timeout support via `CompletableFuture.orTimeout()`; declare via builder `.timeout()` or command `timeout()` method
+- **Lightweight retry** — Built-in per-node retry with configurable max attempts and delay — no external dependencies needed
+- **Conditional execution** — `dependIf()` / `dependIfNot()` enable runtime branch selection; skip nodes based on upstream results
+- **Fallback / default values** — Commands can define `fallback(context, cause)` to return degraded results on failure
 - **Error propagation** — Node exceptions propagate as `ExecutionException`; downstream nodes are cancelled
 
 ## Module Structure
@@ -483,6 +487,133 @@ public class CustomJob implements AsyncCommand<MyContext, String> {
 
 // Or pass executor to lambda nodes
 builder.node("custom", myFunction, myExecutor);
+```
+
+### Timeout Control
+
+dag-flow supports both per-node and DAG-level timeouts to prevent blocking executions from hanging indefinitely.
+
+#### Node-Level Timeout (Builder)
+
+```java
+new JobBuilder<OrderContext>()
+        .node(FetchOrder.class).timeout(Duration.ofSeconds(3))   // 3s timeout for this node
+        .node(CalcDiscount.class).depend(FetchOrder.class)
+        .run(context);
+```
+
+#### Node-Level Timeout (Command Declaration)
+
+Commands can declare their own timeout by overriding the `timeout()` method:
+
+```java
+public class FetchOrder implements AsyncCommand<OrderContext, Order> {
+    @Override
+    public Duration timeout() {
+        return Duration.ofSeconds(3);   // declare timeout in the command itself
+    }
+
+    @Override
+    public Order run(OrderContext context) {
+        return orderService.getById(context.getOrderId());
+    }
+}
+```
+
+Builder-set timeout takes priority over command-declared timeout.
+
+#### DAG-Level Timeout
+
+```java
+new JobBuilder<OrderContext>()
+        .node(FetchOrder.class)
+        .node(CalcDiscount.class).depend(FetchOrder.class)
+        .dagTimeout(Duration.ofSeconds(10))   // entire DAG must finish in 10s
+        .run(context);
+```
+
+When a timeout is exceeded, the node's `CompletableFuture` completes exceptionally with `TimeoutException`, which propagates as `ExecutionException`.
+
+### Lightweight Retry
+
+Built-in per-node retry in the core module — no external dependencies required:
+
+```java
+new JobBuilder<OrderContext>()
+        .node(FetchOrder.class).retry(3, Duration.ofMillis(100))   // 3 retries, 100ms delay
+        .node(CalcDiscount.class).depend(FetchOrder.class)
+        .run(context);
+```
+
+- On failure, the node retries up to `maxRetries` times with the specified delay between attempts
+- After all retries are exhausted, the exception propagates (or fallback is invoked if configured)
+- Retry is per-node; each node's retry policy is independent
+- For batch commands, each batch item is retried independently
+
+### Conditional Execution
+
+Use `dependIf()` and `dependIfNot()` to create dynamic DAGs where branches are selected at runtime based on upstream results:
+
+```java
+new JobBuilder<OrderContext>()
+        .node(CheckVip.class)
+        .node(VipDiscount.class)
+            .dependIf(CheckVip.class, ctx -> ctx.getResult(CheckVip.class))
+        .node(NormalDiscount.class)
+            .dependIfNot(CheckVip.class, ctx -> ctx.getResult(CheckVip.class))
+        .node(BuildResult.class).depend(VipDiscount.class, NormalDiscount.class)
+        .run(context);
+```
+
+```
+                CheckVip
+               /        \
+   [if true]  /          \  [if false]
+    VipDiscount    NormalDiscount
+               \        /
+              BuildResult       ← gets non-null result from the executed branch
+```
+
+- `dependIf(dep, predicate)` — add dependency and execute only if predicate returns `true`
+- `dependIfNot(dep, predicate)` — add dependency and execute only if predicate returns `false`
+- Skipped nodes complete with `null` result; downstream nodes still trigger
+- The condition predicate is evaluated after all dependencies complete, so `ctx.getResult()` is safe to call
+
+### Fallback / Default Values
+
+Commands can define a `fallback()` method to return a degraded result when execution fails:
+
+```java
+public class FetchOrder implements AsyncCommand<OrderContext, Order> {
+    @Override
+    public Order run(OrderContext context) throws Exception {
+        return orderService.getById(context.getOrderId());   // may throw
+    }
+
+    @Override
+    public Order fallback(OrderContext context, Throwable cause) {
+        return Order.empty();   // return a default/degraded result
+    }
+
+    @Override
+    public boolean hasFallback() {
+        return true;   // must return true to enable fallback
+    }
+}
+```
+
+- When a node fails (after all retries if retry is configured), `fallback(context, cause)` is invoked
+- If fallback succeeds, the node completes normally with the fallback result
+- Downstream nodes see the fallback result as a normal result
+- If fallback itself throws, the exception propagates as usual
+- `hasFallback()` must return `true` to activate the fallback mechanism
+
+**Combining retry + fallback:**
+
+```java
+new JobBuilder<OrderContext>()
+        .node(FetchOrder.class).retry(2, Duration.ofMillis(100))   // retry 2 times, then fallback
+        .run(context);
 ```
 
 ## Project Structure

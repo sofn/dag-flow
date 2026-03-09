@@ -9,11 +9,13 @@ import com.lesofn.dagflow.executor.DagFlowDefaultExecutor;
 import com.lesofn.dagflow.model.DagNode;
 import com.lesofn.dagflow.model.DagNodeFactory;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -35,6 +37,11 @@ public class JobBuilder<C extends DagFlowContext> {
      * Whether replay recording is enabled
      */
     protected boolean replayEnabled;
+
+    /**
+     * DAG-level timeout for the entire execution
+     */
+    protected Duration dagTimeout;
 
     // ======================== Class-based node registration ========================
 
@@ -168,6 +175,65 @@ public class JobBuilder<C extends DagFlowContext> {
         return this;
     }
 
+    // ======================== Conditional dependency ========================
+
+    /**
+     * Add a conditional dependency. The current node depends on the specified dependency class,
+     * and will only execute if the condition evaluates to true after the dependency completes.
+     *
+     * @param depend    the dependency class
+     * @param condition the condition predicate evaluated against the context
+     */
+    public JobBuilder<C> dependIf(Class<? extends DagFlowCommand<C, ?>> depend, Predicate<C> condition) {
+        if (this.currentNode == null) {
+            throw new DagFlowBuildException("please add node");
+        }
+        this.currentNode.addDepend(nodeFactory.findOrCreateByClass(depend));
+        this.currentNode.setCondition(condition);
+        return this;
+    }
+
+    /**
+     * Add a conditional dependency with negated condition. The current node depends on the specified
+     * dependency class, and will only execute if the condition evaluates to false.
+     *
+     * @param depend    the dependency class
+     * @param condition the condition predicate (will be negated)
+     */
+    public JobBuilder<C> dependIfNot(Class<? extends DagFlowCommand<C, ?>> depend, Predicate<C> condition) {
+        return dependIf(depend, condition.negate());
+    }
+
+    // ======================== Node-level configuration ========================
+
+    /**
+     * Set timeout for the current node. Overrides the command's timeout() declaration.
+     *
+     * @param timeout timeout duration
+     */
+    public JobBuilder<C> timeout(Duration timeout) {
+        if (this.currentNode == null) {
+            throw new DagFlowBuildException("please add node");
+        }
+        this.currentNode.setTimeout(timeout);
+        return this;
+    }
+
+    /**
+     * Set retry policy for the current node.
+     *
+     * @param maxRetries maximum number of retries (must be > 0)
+     * @param delay      delay between retries
+     */
+    public JobBuilder<C> retry(int maxRetries, Duration delay) {
+        if (this.currentNode == null) {
+            throw new DagFlowBuildException("please add node");
+        }
+        this.currentNode.setMaxRetries(maxRetries);
+        this.currentNode.setRetryDelay(delay);
+        return this;
+    }
+
     // ======================== Configuration ========================
 
     /**
@@ -187,6 +253,16 @@ public class JobBuilder<C extends DagFlowContext> {
         return this;
     }
 
+    /**
+     * Set DAG-level timeout. The entire DAG execution must complete within this duration.
+     *
+     * @param timeout timeout duration for the whole DAG execution
+     */
+    public JobBuilder<C> dagTimeout(Duration timeout) {
+        this.dagTimeout = timeout;
+        return this;
+    }
+
     public JobRunner<C> run(C context) throws ExecutionException, InterruptedException {
         JobRunner<C> runner = new JobRunner<>();
         //每次运行，都执行一次初始化，重置状态
@@ -194,7 +270,7 @@ public class JobBuilder<C extends DagFlowContext> {
             node.init();
             node.setExecutorOverride(executorOverride);
         });
-        return runner.run(context, this.nodeFactory, this.replayEnabled);
+        return runner.run(context, this.nodeFactory, this.replayEnabled, this.dagTimeout);
     }
 
 }

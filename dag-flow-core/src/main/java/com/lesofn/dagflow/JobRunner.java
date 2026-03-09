@@ -16,11 +16,13 @@ import io.opentelemetry.context.Scope;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -42,10 +44,14 @@ public class JobRunner<C extends DagFlowContext> {
     }
 
     JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory) throws ExecutionException, InterruptedException {
-        return run(context, nodeFactory, false);
+        return run(context, nodeFactory, false, null);
     }
 
     JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory, boolean replayEnabled) throws ExecutionException, InterruptedException {
+        return run(context, nodeFactory, replayEnabled, null);
+    }
+
+    JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory, boolean replayEnabled, Duration dagTimeout) throws ExecutionException, InterruptedException {
         boolean hasCycle = DagNodeCheck.hasCycle(nodeFactory.getNodes());
         if (hasCycle) {
             throw new DagFlowCycleException("Cycle detected in DAG nodes");
@@ -99,7 +105,11 @@ public class JobRunner<C extends DagFlowContext> {
                     node.startNode(context);
                 }
             }
-            CompletableFuture.allOf(this.futureMap.values().toArray(new CompletableFuture[]{})).get();
+            CompletableFuture<Void> allFuture = CompletableFuture.allOf(this.futureMap.values().toArray(new CompletableFuture[]{}));
+            if (dagTimeout != null) {
+                allFuture.orTimeout(dagTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            }
+            allFuture.get();
             DagFlowTracing.endSpanOk(dagSpan);
             if (collector != null) {
                 collector.onDagEnd(true);

@@ -74,6 +74,10 @@ DAG-based multi-threaded parallel computation framework in Java. Simplifies deve
 - `DagNodeCheckSpec` — Cycle detection unit tests (9 tests)
 - `DagScenarioSpec` — Comprehensive scenario tests (33 tests)
 - `ErrorHandlingSpec` — Error propagation tests (2 tests)
+- `TimeoutSpec` — Node-level and DAG-level timeout tests
+- `RetrySpec` — Lightweight retry mechanism tests
+- `ConditionalSpec` — Conditional execution (dependIf/dependIfNot) tests
+- `FallbackSpec` — Fallback / default value tests
 - Test fixtures: `test1/`, `test2/`, `testerror/`
 
 ### Hystrix Tests (`dag-flow-hystrix/src/test/`)

@@ -20,10 +20,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jooq.lambda.fi.util.function.CheckedSupplier;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -75,6 +78,31 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
      */
     private DagFlowReplayCollector replayCollector;
 
+    /**
+     * Node-level timeout, set by builder. Takes priority over command's timeout().
+     */
+    private Duration timeout;
+
+    /**
+     * Maximum number of retries (0 = no retry).
+     */
+    private int maxRetries;
+
+    /**
+     * Delay between retries.
+     */
+    private Duration retryDelay;
+
+    /**
+     * Execution condition. If set and evaluates to false, node is skipped.
+     */
+    private Predicate<C> condition;
+
+    /**
+     * Whether this node was skipped due to condition evaluation.
+     */
+    private boolean skipped;
+
     private volatile boolean started;
 
     public DagNode(String name) {
@@ -109,6 +137,7 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
     public void init() {
         this.started = false;
         this.future = null;
+        this.skipped = false;
     }
 
     /**
@@ -129,6 +158,21 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
         }
         this.started = true;
 
+        // Check condition (conditional execution)
+        if (condition != null) {
+            try {
+                if (!condition.test(context)) {
+                    this.skipped = true;
+                    getFuture().complete(null);
+                    return getFuture();
+                }
+            } catch (Exception e) {
+                log.error("DagFlow condition evaluation error for node [{}]", name, e);
+                getFuture().completeExceptionally(e);
+                return getFuture();
+            }
+        }
+
         Context parentCtx = parentTraceContext != null ? parentTraceContext : Context.current();
         Span nodeSpan = DagFlowTracing.startNodeSpan(parentCtx, name, getCommandType());
         Context nodeContext = parentCtx.with(nodeSpan);
@@ -142,14 +186,21 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
         } else if (executor != null) {
             executor.execute(nodeContext.wrap(() -> {
                 try (Scope ignored = nodeSpan.makeCurrent()) {
-                    this.execute(getFuture(), CheckedSupplier.unchecked(() -> this.instance.run(context)), nodeSpan);
+                    this.execute(getFuture(), CheckedSupplier.unchecked(() -> this.instance.run(context)), nodeSpan, context, true);
                 }
             }));
         } else {
             try (Scope ignored = nodeSpan.makeCurrent()) {
-                this.execute(getFuture(), CheckedSupplier.unchecked(() -> this.instance.run(context)), nodeSpan);
+                this.execute(getFuture(), CheckedSupplier.unchecked(() -> this.instance.run(context)), nodeSpan, context, true);
             }
         }
+
+        // Apply timeout
+        Duration effectiveTimeout = resolveTimeout();
+        if (effectiveTimeout != null) {
+            getFuture().orTimeout(effectiveTimeout.toMillis(), TimeUnit.MILLISECONDS);
+        }
+
         return getFuture();
     }
 
@@ -187,23 +238,64 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
         return executor;
     }
 
-    private <R> void execute(CompletableFuture<R> future, Supplier<R> supplier, Span span) {
+    /**
+     * Resolve effective timeout: builder-set timeout takes priority over command-declared timeout.
+     */
+    private Duration resolveTimeout() {
+        if (this.timeout != null) return this.timeout;
+        if (this.instance != null) return this.instance.timeout();
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> void execute(CompletableFuture<R> future, Supplier<R> supplier, Span span, C context, boolean allowFallback) {
         if (replayCollector != null) {
             replayCollector.onNodeStart(name);
         }
-        try {
-            future.complete(supplier.get());
-            DagFlowTracing.endSpanOk(span);
-            if (replayCollector != null) {
-                replayCollector.onNodeEnd(name, true, null);
+        Exception lastException = null;
+        int totalAttempts = maxRetries + 1;
+        for (int attempt = 0; attempt < totalAttempts; attempt++) {
+            try {
+                if (attempt > 0) {
+                    log.warn("DagFlow node [{}] retry {}/{}", name, attempt, maxRetries);
+                    if (retryDelay != null && retryDelay.toMillis() > 0) {
+                        Thread.sleep(retryDelay.toMillis());
+                    }
+                }
+                future.complete(supplier.get());
+                DagFlowTracing.endSpanOk(span);
+                if (replayCollector != null) {
+                    replayCollector.onNodeEnd(name, true, null);
+                }
+                return;
+            } catch (Exception e) {
+                lastException = e;
             }
-        } catch (Exception e) {
-            log.error("DagFlow run error", e);
-            future.completeExceptionally(e);
-            DagFlowTracing.endSpanError(span, e);
-            if (replayCollector != null) {
-                replayCollector.onNodeEnd(name, false, e);
+        }
+
+        // All retries exhausted — try fallback
+        if (allowFallback && instance != null && ((DagFlowCommand<C, ?>) instance).hasFallback()) {
+            try {
+                R fallbackResult = ((DagFlowCommand<C, R>) instance).fallback(context, lastException);
+                future.complete(fallbackResult);
+                log.info("DagFlow node [{}] fallback executed", name);
+                DagFlowTracing.endSpanOk(span);
+                if (replayCollector != null) {
+                    replayCollector.onNodeEnd(name, true, null);
+                }
+                return;
+            } catch (Exception fe) {
+                log.error("DagFlow node [{}] fallback failed", name, fe);
+                lastException = fe;
             }
+        }
+
+        // Failed
+        log.error("DagFlow run error", lastException);
+        future.completeExceptionally(lastException);
+        DagFlowTracing.endSpanError(span, lastException);
+        if (replayCollector != null) {
+            replayCollector.onNodeEnd(name, false, lastException);
         }
     }
 
@@ -245,12 +337,12 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
             if (executor != null) {
                 executor.execute(itemContext.wrap(() -> {
                     try (Scope ignored = itemSpan.makeCurrent()) {
-                        this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p)), itemSpan);
+                        this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p)), itemSpan, context, false);
                     }
                 }));
             } else {
                 try (Scope ignored = itemSpan.makeCurrent()) {
-                    this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p)), itemSpan);
+                    this.execute(itemFuture, CheckedSupplier.unchecked(() -> batchNode.run(context, p)), itemSpan, context, false);
                 }
             }
 
