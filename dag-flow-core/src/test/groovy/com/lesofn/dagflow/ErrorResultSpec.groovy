@@ -8,7 +8,7 @@ import spock.lang.Specification
 import java.util.function.Function
 
 /**
- * P0-2: 错误不再静默吞没，getResult 严格化测试
+ * P0-2 / P1-1: 错误不再静默吞没，getResult / context.getResult 严格化测试
  */
 class ErrorResultSpec extends Specification {
 
@@ -27,6 +27,14 @@ class ErrorResultSpec extends Specification {
         @Override
         String run(SimpleContext context) {
             return "got_" + context.getResult("upstream")
+        }
+    }
+
+    static class DependOnMissing implements AsyncCommand<SimpleContext, String> {
+        @Override
+        String run(SimpleContext context) {
+            context.getResult("missing")
+            return "done"
         }
     }
 
@@ -90,5 +98,20 @@ class ErrorResultSpec extends Specification {
 
         then:
         runner.getResult(DependByName.class) == "got_up"
+    }
+
+    def "context getResult by name throws for missing node"() {
+        given:
+        def ctx = new SimpleContext(name: "test")
+
+        when:
+        new JobBuilder<SimpleContext>()
+                .node(DependOnMissing.class)
+                .run(ctx)
+
+        then:
+        def e = thrown(Exception)
+        e instanceof java.util.concurrent.ExecutionException
+        e.cause instanceof DagFlowRunException
     }
 }

@@ -181,6 +181,13 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
         if (this.instance instanceof SyncCommand) {
             return dagFlowExecutor != null ? dagFlowExecutor.syncExecutor() : null;
         }
+        if (this.instance instanceof BatchCommand) {
+            Executor executor = ((BatchCommand<?, ?, ?>) this.instance).executor();
+            if (executor == null) {
+                executor = dagFlowExecutor != null ? dagFlowExecutor.asyncExecutor() : DagFlowDefaultExecutor.ASYNC_DEFAULT_EXECUTOR;
+            }
+            return executor;
+        }
         Executor executor = null;
         if (this.instance instanceof AsyncCommand) {
             executor = ((AsyncCommand<?, ?>) this.instance).executor();
