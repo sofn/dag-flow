@@ -6,12 +6,14 @@ import com.lesofn.dagflow.api.function.ConsumerCommand;
 import com.lesofn.dagflow.api.function.FunctionCommand;
 import com.lesofn.dagflow.exception.DagFlowBuildException;
 import com.lesofn.dagflow.executor.DagFlowDefaultExecutor;
+import com.lesofn.dagflow.executor.DagFlowExecutor;
 import com.lesofn.dagflow.model.DagNode;
 import com.lesofn.dagflow.model.DagNodeFactory;
 
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -30,6 +32,16 @@ public class JobBuilder<C extends DagFlowContext> {
      * 全局执行器覆盖，用于虚拟线程等场景
      */
     protected Executor executorOverride;
+
+    /**
+     * 当前 DAG 的共享执行器，默认每个 Builder 拥有独立实例
+     */
+    protected DagFlowExecutor dagFlowExecutor = DagFlowExecutor.defaultExecutor();
+
+    /**
+     * DAG / 节点超时，0 表示不设置超时
+     */
+    protected long timeoutMillis = 0;
 
     // ======================== Class-based node registration ========================
 
@@ -166,10 +178,26 @@ public class JobBuilder<C extends DagFlowContext> {
     // ======================== Configuration ========================
 
     /**
+     * 配置当前 DAG 使用的共享执行器
+     */
+    public JobBuilder<C> executor(DagFlowExecutor executor) {
+        this.dagFlowExecutor = executor;
+        return this;
+    }
+
+    /**
+     * 设置 DAG 与节点的超时时间
+     */
+    public JobBuilder<C> timeout(long timeout, TimeUnit unit) {
+        this.timeoutMillis = unit.toMillis(timeout);
+        return this;
+    }
+
+    /**
      * 启用虚拟线程执行器 (Java 21+)，所有非 SyncCommand 节点将在虚拟线程上执行
      */
     public JobBuilder<C> useVirtualThreads() {
-        this.executorOverride = DagFlowDefaultExecutor.newVirtualThreadExecutor();
+        this.dagFlowExecutor = DagFlowExecutor.virtualThreads();
         return this;
     }
 
@@ -178,9 +206,11 @@ public class JobBuilder<C extends DagFlowContext> {
         //每次运行，都执行一次初始化，重置状态
         nodeFactory.getNodes().forEach(node -> {
             node.init();
+            node.setDagFlowExecutor(dagFlowExecutor);
             node.setExecutorOverride(executorOverride);
+            node.setTimeoutMillis(timeoutMillis);
         });
-        return runner.run(context, this.nodeFactory);
+        return runner.run(context, this.nodeFactory, timeoutMillis);
     }
 
 }

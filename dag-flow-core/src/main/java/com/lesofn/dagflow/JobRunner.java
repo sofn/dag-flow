@@ -16,8 +16,11 @@ import org.apache.commons.collections4.CollectionUtils;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * @author sofn
@@ -30,6 +33,10 @@ public class JobRunner<C extends DagFlowContext> {
     private final Map<Class<?>, String> classNodeNameMap = new HashMap<>();
 
     JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory) throws ExecutionException, InterruptedException {
+        return run(context, nodeFactory, 0);
+    }
+
+    JobRunner<C> run(C context, DagNodeFactory<C> nodeFactory, long timeoutMillis) throws ExecutionException, InterruptedException {
         boolean hasCycle = DagNodeCheck.hasCycle(nodeFactory.getNodes());
         if (hasCycle) {
             throw new DagFlowCycleException("Cycle detected in DAG nodes");
@@ -71,7 +78,16 @@ public class JobRunner<C extends DagFlowContext> {
                     node.startNode(context);
                 }
             }
-            CompletableFuture.allOf(this.futureMap.values().toArray(new CompletableFuture[]{})).get();
+            CompletableFuture<?>[] nodeFutures = this.futureMap.values().toArray(new CompletableFuture[]{});
+            if (timeoutMillis > 0) {
+                try {
+                    CompletableFuture.allOf(nodeFutures).get(timeoutMillis, TimeUnit.MILLISECONDS);
+                } catch (TimeoutException e) {
+                    throw new ExecutionException("DAG execution timed out after " + timeoutMillis + "ms", e);
+                }
+            } else {
+                CompletableFuture.allOf(nodeFutures).get();
+            }
             DagFlowTracing.endSpanOk(dagSpan);
         } catch (Exception e) {
             DagFlowTracing.endSpanError(dagSpan, e);
@@ -82,6 +98,9 @@ public class JobRunner<C extends DagFlowContext> {
 
     public <T> T getResult(String nodeName) {
         CompletableFuture<?> future = futureMap.get(nodeName);
+        if (future == null) {
+            throw new DagFlowRunException("Node not registered: " + nodeName);
+        }
         return getFutureValue(nodeName, future);
     }
 
@@ -94,17 +113,61 @@ public class JobRunner<C extends DagFlowContext> {
         return getFutureValue(nodeName, future);
     }
 
+    public Optional<Object> tryGetResult(String nodeName) {
+        try {
+            return Optional.ofNullable(getResult(nodeName));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    public <T> Optional<T> tryGetResult(Class<? extends DagFlowCommand<?, T>> clazz) {
+        try {
+            return Optional.ofNullable(getResult(clazz));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> T getResultOrDefault(String nodeName, T defaultValue) {
+        try {
+            Object result = getResult(nodeName);
+            return result != null ? (T) result : defaultValue;
+        } catch (Exception e) {
+            return defaultValue;
+        }
+    }
+
+    public <T> T getResultOrDefault(Class<? extends DagFlowCommand<?, T>> clazz, T defaultValue) {
+        return tryGetResult(clazz).orElse(defaultValue);
+    }
+
     @SuppressWarnings("unchecked")
     private <T> T getFutureValue(String nodeName, CompletableFuture<?> future) {
         try {
             return (T) future.get();
         } catch (InterruptedException e) {
-            log.error("node run Interrupted", e);
+            Thread.currentThread().interrupt();
+            throw new DagFlowRunException("node interrupted: " + nodeName, e);
         } catch (ExecutionException e) {
-            log.error("node run error", e.getCause());
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) {
+                throw (RuntimeException) cause;
+            }
+            throw new DagFlowRunException("node run error: " + nodeName, cause);
         }
-        log.error("node: {} run error", nodeName, new DagFlowRunException("return default value"));
-        return null;
+    }
+
+    public <T> T getResultNow(String nodeName) {
+        CompletableFuture<?> future = futureMap.get(nodeName);
+        if (future == null) {
+            throw new DagFlowRunException("Node not registered: " + nodeName);
+        }
+        if (!future.isDone()) {
+            throw new DagFlowRunException("getResultNow error, please add depend: " + nodeName);
+        }
+        return getFutureValue(nodeName, future);
     }
 
     @SuppressWarnings("unchecked")
@@ -113,16 +176,6 @@ public class JobRunner<C extends DagFlowContext> {
         if (nodeName == null) {
             throw new DagFlowRunException("Node not registered: " + DagNodeFactory.getClassNodeName(clazz));
         }
-        CompletableFuture<?> future = futureMap.get(nodeName);
-        if (future.isDone()) {
-            try {
-                return (T) future.getNow(null);
-            } catch (Exception e) {
-                log.error(nodeName + " run error", e);
-                throw new DagFlowRunException("run error", e);
-            }
-        }
-        log.error(nodeName + " run error", new DagFlowRunException("return default value"));
-        throw new DagFlowRunException("getResultNow error, please add depend");
+        return getResultNow(nodeName);
     }
 }

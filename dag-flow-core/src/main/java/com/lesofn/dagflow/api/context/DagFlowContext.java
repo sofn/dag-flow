@@ -18,7 +18,7 @@ public abstract class DagFlowContext {
     }
 
     public <C extends DagFlowContext, T extends DagFlowCommand<C, R>, R> R getResult(String nodeName) {
-        return null;
+        return runner.getResultNow(nodeName);
     }
 
 

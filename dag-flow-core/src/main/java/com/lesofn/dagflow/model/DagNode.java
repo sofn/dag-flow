@@ -8,6 +8,7 @@ import com.lesofn.dagflow.api.DagFlowCommand;
 import com.lesofn.dagflow.api.SyncCommand;
 import com.lesofn.dagflow.api.context.DagFlowContext;
 import com.lesofn.dagflow.executor.DagFlowDefaultExecutor;
+import com.lesofn.dagflow.executor.DagFlowExecutor;
 import com.lesofn.dagflow.tracing.DagFlowTracing;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.context.Context;
@@ -22,6 +23,7 @@ import org.jooq.lambda.fi.util.function.CheckedSupplier;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
@@ -63,6 +65,16 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
      * 执行器覆盖（如虚拟线程），优先级高于命令默认执行器
      */
     private Executor executorOverride;
+
+    /**
+     * 当前 DAG 的共享执行器；优先级低于 executorOverride，高于全局静态池
+     */
+    private DagFlowExecutor dagFlowExecutor;
+
+    /**
+     * 节点级超时（毫秒），0 表示不超时
+     */
+    private long timeoutMillis;
 
     /**
      * OTel 父上下文，由 JobRunner 在 run 时设置
@@ -123,6 +135,10 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
         }
         this.started = true;
 
+        if (timeoutMillis > 0) {
+            getFuture().orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
+        }
+
         Context parentCtx = parentTraceContext != null ? parentTraceContext : Context.current();
         Span nodeSpan = DagFlowTracing.startNodeSpan(parentCtx, name, getCommandType());
         Context nodeContext = parentCtx.with(nodeSpan);
@@ -159,23 +175,22 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
     }
 
     private Executor getExecutor() {
-        if (this.instance instanceof SyncCommand) {
-            return null;
-        }
-        //全局执行器覆盖（如虚拟线程）
         if (executorOverride != null) {
             return executorOverride;
+        }
+        if (this.instance instanceof SyncCommand) {
+            return dagFlowExecutor != null ? dagFlowExecutor.syncExecutor() : null;
         }
         Executor executor = null;
         if (this.instance instanceof AsyncCommand) {
             executor = ((AsyncCommand<?, ?>) this.instance).executor();
             if (executor == null) {
-                executor = DagFlowDefaultExecutor.ASYNC_DEFAULT_EXECUTOR;
+                executor = dagFlowExecutor != null ? dagFlowExecutor.asyncExecutor() : DagFlowDefaultExecutor.ASYNC_DEFAULT_EXECUTOR;
             }
         } else if (this.instance instanceof CalcCommand) {
             executor = ((CalcCommand<?, ?>) this.instance).executor();
             if (executor == null) {
-                executor = DagFlowDefaultExecutor.CALC_DEFAULT_EXECUTOR;
+                executor = dagFlowExecutor != null ? dagFlowExecutor.calcExecutor() : DagFlowDefaultExecutor.CALC_DEFAULT_EXECUTOR;
             }
         }
         return executor;
@@ -216,6 +231,9 @@ public class DagNode<C extends DagFlowContext, T extends DagFlowCommand<C, ?>> {
 
         for (P p : batchParam) {
             CompletableFuture<R> itemFuture = new CompletableFuture<>();
+            if (timeoutMillis > 0) {
+                itemFuture.orTimeout(timeoutMillis, TimeUnit.MILLISECONDS);
+            }
             childFutures.add(Pair.of(p, itemFuture));
 
             Span itemSpan = DagFlowTracing.startBatchItemSpan(nodeContext, name, p);
